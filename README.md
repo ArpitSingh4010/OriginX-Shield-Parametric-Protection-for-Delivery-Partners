@@ -85,6 +85,8 @@ The system works as follows:
 6. The system verifies the worker’s activity and location
 
 7. The payout is processed instantly
+<img width="1536" height="1024" alt="Image Mar 18, 2026, 08_45_23 AM" src="https://github.com/user-attachments/assets/59a07843-4698-4d22-bdab-d7f1cae81bc3" />
+
 
 
 
