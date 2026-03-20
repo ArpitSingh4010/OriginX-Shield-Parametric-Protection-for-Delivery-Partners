@@ -26,13 +26,13 @@ Gig workers face income instability due to external conditions that are beyond t
 
 Common issues include:
 
-. Heavy rain is stopping deliveries
+. Heavy rain stopping deliveries
 
-. Flooded roads are making travel unsafe
+. Flooded roads making travel unsafe
 
-. Extreme heat is reducing work hours
+. Extreme heat reducing work hours
 
-. High pollution is affecting outdoor activity
+. High pollution affecting outdoor activity
 
 . Local curfews or area shutdowns
 
@@ -51,8 +51,6 @@ Traditional insurance does not solve this problem because:
 GigShield is an AI-powered parametric insurance platform designed specifically for food delivery workers.
 
 The system works automatically:
-
-. Workers subscribe to a weekly insurance plan
 
 . The platform monitors real-time external conditions
 
@@ -110,6 +108,8 @@ The system then automatically compensates the worker for the lost income.
 
 7. If valid, payout is processed instantly
 
+8. If flagged, claim is sent for manual review
+
 
 **7. Weekly Premium Model**
 
@@ -160,6 +160,12 @@ Instead of relying only on GPS, GigShield uses a multi-layer fraud prevention ap
 
 This approach significantly reduces the chances of fraudulent claims and ensures system reliability.
 
+### Platform Dependency Handling
+
+While delivery platform APIs (Swiggy/Zomato) improve verification accuracy, the system is designed to remain functional even without them.  
+
+In cases where API access is unavailable or delayed, fallback validation using behavioural signals such as movement patterns, recent activity, and location consistency is used to ensure continuity.
+
 **10. Platform Choice**
 
 We are developing a web-based platform for this project.
@@ -198,13 +204,19 @@ To prevent misuse of the system, AI is used to identify suspicious or abnormal b
 
 The system checks:
 
-Consistency of location data across multiple sources
+. Consistency of location data across multiple sources
 
-Claim frequency patterns of individual users
+. Claim frequency patterns of individual users
 
-Mismatch between actual disruption events and user activity
+. Mismatch between actual disruption events and user activity
 
 If unusual patterns are detected, the claim is either flagged for review or temporarily held, reducing the chances of fraudulent payouts.
+
+### Dynamic Risk Control
+
+The system includes a circuit breaker mechanism to prevent coordinated fraud.  
+
+Instead of using fixed thresholds, the limits are dynamically adjusted based on zone size, number of active workers, and historical activity patterns to avoid blocking genuine claims during large-scale events such as floods.
 
 **12. Technology Stack**
 
@@ -234,7 +246,7 @@ Razorpay (sandbox mode)
 
 This architecture shows how different components of the system interact, including user applications, backend services, AI modules, external APIs, and payment systems.
 
-**13. Workflow Diagram**
+**14. Workflow Diagram**
 ![PHOTO-2026-03-20-21-37-15](https://github.com/user-attachments/assets/97824b2b-dddb-4aa1-9db9-ee80a4e600ad)
 
 
@@ -282,5 +294,11 @@ The claim process is fully automated
 
 The solution is scalable to other gig worker categories in the future
 
-**16. Demo Video**
+**16. Privacy Considerations**
+
+The system is designed with user privacy in mind.  
+
+Only necessary data is collected for verification, and all sensitive information is encrypted and processed with user consent. The system avoids storing unnecessary personal data.
+
+**17. Demo Video**
 
