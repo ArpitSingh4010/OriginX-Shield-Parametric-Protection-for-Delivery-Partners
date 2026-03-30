@@ -1,7 +1,5 @@
 **OriginX – GigShield – AI Parametric Insurance for Food Delivery Workers**
 
-Guidewire DEVTrails Hackathon 2026
-
 **Team OriginX**
 
 1. SHRESTHA VERDHAN
@@ -303,3 +301,9 @@ Only necessary data is collected for verification, and all sensitive information
 **17. Demo Video**
 
 https://youtu.be/qJf-wKjICPI
+
+**18. Regulatory Considerations**
+
+GigShield is designed as a prototype system. In real-world deployment, it would operate under IRDAI regulations by partnering with licensed insurance providers. Standard compliance requirements, such as pricing validation, claim transparency, and defined coverage exclusions, would be incorporated.
+
+
