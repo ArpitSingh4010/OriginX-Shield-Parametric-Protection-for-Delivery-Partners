@@ -19,7 +19,6 @@ authRouter.post(
     const { username, password } = request.body;
     const configuredUsername = process.env.AUTH_DEMO_USERNAME || 'admin';
     const configuredPasswordHash = process.env.AUTH_DEMO_PASSWORD_HASH || '';
-    const configuredPlainPassword = process.env.AUTH_DEMO_PASSWORD || '';
     const jwtSecret = process.env.JWT_SECRET_KEY;
 
     if (!jwtSecret) {
@@ -36,12 +35,14 @@ authRouter.post(
       });
     }
 
-    let isPasswordValid = false;
-    if (configuredPasswordHash) {
-      isPasswordValid = await bcrypt.compare(password, configuredPasswordHash);
-    } else if (configuredPlainPassword) {
-      isPasswordValid = password === configuredPlainPassword;
+    if (!configuredPasswordHash) {
+      return response.status(500).json({
+        success: false,
+        message: 'AUTH_DEMO_PASSWORD_HASH is not configured on the server.',
+      });
     }
+
+    const isPasswordValid = await bcrypt.compare(password, configuredPasswordHash);
 
     if (!isPasswordValid) {
       return response.status(401).json({
