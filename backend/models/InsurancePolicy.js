@@ -6,7 +6,10 @@
  */
 
 const mongoose = require('mongoose');
-const { INSURANCE_POLICY_STATUSES } = require('../config/parametricInsuranceConstants');
+const {
+  INSURANCE_POLICY_STATUSES,
+  COVERAGE_EXCLUSIONS,
+} = require('../config/parametricInsuranceConstants');
 
 const insurancePolicySchema = new mongoose.Schema(
   {
@@ -59,6 +62,18 @@ const insurancePolicySchema = new mongoose.Schema(
 
     razorpayPaymentId: {
       type: String,
+      default: null,
+    },
+
+    coverageExclusions: {
+      type: [String],
+      enum: Object.values(COVERAGE_EXCLUSIONS),
+      default: Object.values(COVERAGE_EXCLUSIONS),
+    },
+
+    projectedLossRatioAtEnrollment: {
+      type: Number,
+      min: 0,
       default: null,
     },
   },

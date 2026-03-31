@@ -67,6 +67,12 @@ const deliveryPartnerSchema = new mongoose.Schema(
       default: 0,
     },
 
+    averageMonthlyEarningsInRupees: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
+
     activeInsurancePolicyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'InsurancePolicy',

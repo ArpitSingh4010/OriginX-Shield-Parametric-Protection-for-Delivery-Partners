@@ -12,6 +12,7 @@
 const InsuranceClaim = require('../models/InsuranceClaim');
 const InsurancePolicy = require('../models/InsurancePolicy');
 const DeliveryPartner = require('../models/DeliveryPartner');
+const DisruptionEvent = require('../models/DisruptionEvent');
 const {
   INSURANCE_CLAIM_STATUSES,
   INSURANCE_POLICY_STATUSES,
@@ -154,6 +155,26 @@ async function processIncomingInsuranceClaim(incomingClaimRequestData) {
 
   const activeInsurancePolicy =
     await fetchActiveInsurancePolicyForDeliveryPartner(deliveryPartnerId);
+
+  const triggeringDisruptionEvent = await DisruptionEvent.findById(triggeringDisruptionEventId);
+  if (!triggeringDisruptionEvent) {
+    throw new Error(
+      `No disruption event found with ID: ${triggeringDisruptionEventId}`
+    );
+  }
+
+  const policyCoverageExclusions = Array.isArray(activeInsurancePolicy.coverageExclusions)
+    ? activeInsurancePolicy.coverageExclusions
+    : [];
+
+  if (
+    triggeringDisruptionEvent.policyExclusionTag
+    && policyCoverageExclusions.includes(triggeringDisruptionEvent.policyExclusionTag)
+  ) {
+    throw new Error(
+      `Claim cannot be processed because disruption event is excluded: ${triggeringDisruptionEvent.policyExclusionTag}`
+    );
+  }
 
   const rainfallSeverityRatio = calculateDisruptionSeverityRatio(
     currentEnvironmentalConditions.rainfallInMillimetres || 0,

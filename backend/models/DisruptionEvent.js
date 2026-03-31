@@ -9,7 +9,10 @@
  */
 
 const mongoose = require('mongoose');
-const { DISRUPTION_EVENT_TYPES } = require('../config/parametricInsuranceConstants');
+const {
+  DISRUPTION_EVENT_TYPES,
+  COVERAGE_EXCLUSIONS,
+} = require('../config/parametricInsuranceConstants');
 
 const disruptionEventSchema = new mongoose.Schema(
   {
@@ -78,6 +81,12 @@ const disruptionEventSchema = new mongoose.Schema(
     hasAutomaticClaimTriggerBeenFired: {
       type: Boolean,
       default: false,
+    },
+
+    policyExclusionTag: {
+      type: String,
+      enum: [null, ...Object.values(COVERAGE_EXCLUSIONS)],
+      default: null,
     },
   },
   {

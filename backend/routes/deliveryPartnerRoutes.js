@@ -27,6 +27,7 @@ deliveryPartnerRouter.post('/register', async (request, response) => {
       primaryDeliveryCity,
       primaryDeliveryZoneCoordinates,
       deliveryPlatformNames,
+      averageMonthlyEarningsInRupees,
     } = request.body;
 
     const existingPartnerWithSameEmail = await DeliveryPartner.findOne({ emailAddress });
@@ -44,6 +45,7 @@ deliveryPartnerRouter.post('/register', async (request, response) => {
       primaryDeliveryCity,
       primaryDeliveryZoneCoordinates,
       deliveryPlatformNames,
+      averageMonthlyEarningsInRupees,
     });
 
     const savedDeliveryPartner = await newDeliveryPartner.save();

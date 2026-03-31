@@ -7,9 +7,13 @@
 
 const {
   calculateAdjustedWeeklyPremium,
+  calculateContextualWeeklyPremium,
+  calculateProjectedLossRatio,
   calculateProRatedPremiumForRemainingDays,
   getInsurancePlanConfiguration,
+  getPlatformRiskMultiplier,
   getRiskMultiplierForLocationCategory,
+  identifyPersonaEarningsBand,
 } = require('../services/weeklyPremiumCalculator');
 
 describe('getInsurancePlanConfiguration', () => {
@@ -94,6 +98,61 @@ describe('calculateAdjustedWeeklyPremium', () => {
       'MODERATE_RISK_ZONE'
     );
     expect(Number.isInteger(adjustedWeeklyPremiumInRupees)).toBe(true);
+  });
+});
+
+describe('getPlatformRiskMultiplier', () => {
+  test('returns average multiplier for multiple platforms', () => {
+    const platformMultiplier = getPlatformRiskMultiplier(['swiggy', 'blinkit']);
+    expect(platformMultiplier).toBeCloseTo(1.085, 3);
+  });
+
+  test('returns default OTHER multiplier for empty list', () => {
+    expect(getPlatformRiskMultiplier([])).toBe(1.0);
+  });
+});
+
+describe('identifyPersonaEarningsBand', () => {
+  test('returns entry-level band for low monthly earnings', () => {
+    const earningsBand = identifyPersonaEarningsBand(18000);
+    expect(earningsBand.averageDailyEarningsInRupees).toBe(700);
+  });
+
+  test('falls back to mid-tier band for out-of-range value', () => {
+    const earningsBand = identifyPersonaEarningsBand(100000);
+    expect(earningsBand.averageDailyEarningsInRupees).toBe(1000);
+  });
+});
+
+describe('calculateProjectedLossRatio', () => {
+  test('returns expected ratio rounded to 2 decimals', () => {
+    const projectedLossRatio = calculateProjectedLossRatio({
+      weeklyPremiumInRupees: 100,
+      weeklyCoverageInRupees: 300,
+      expectedPayoutSeverityRatio: 0.3,
+    });
+    expect(projectedLossRatio).toBe(0.9);
+  });
+});
+
+describe('calculateContextualWeeklyPremium', () => {
+  test('returns premium and justification with sustainable loss-ratio signal', () => {
+    const calculationResult = calculateContextualWeeklyPremium({
+      selectedPlanTier: 'standard',
+      locationRiskCategory: 'moderate_risk_zone',
+      deliveryPlatformNames: ['swiggy'],
+      averageMonthlyEarningsInRupees: 25000,
+    });
+
+    expect(calculationResult.adjustedWeeklyPremiumInRupees).toBeGreaterThan(0);
+    expect(calculationResult.maximumCoverageInRupees).toBe(500);
+    expect(calculationResult.pricingJustification.weeklyEarningsEstimateInRupees).toBe(6000);
+    expect(calculationResult.pricingJustification.platformRiskMultiplier).toBe(1.05);
+    expect([
+      'above_sustainable_band',
+      'within_sustainable_band',
+      'below_sustainable_band',
+    ]).toContain(calculationResult.pricingJustification.lossRatioAssessment);
   });
 });
 

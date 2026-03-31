@@ -10,6 +10,10 @@
 const {
   WEEKLY_INSURANCE_PLANS,
   LOCATION_RISK_PREMIUM_MULTIPLIERS,
+  PLATFORM_RISK_PREMIUM_MULTIPLIERS,
+  DELIVERY_PARTNER_PERSONA_EARNINGS_BANDS,
+  PREMIUM_MODEL_ASSUMPTIONS,
+  LOSS_RATIO_GUARDRAILS,
 } = require('../config/parametricInsuranceConstants');
 
 /**
@@ -86,6 +90,105 @@ function calculateAdjustedWeeklyPremium(selectedPlanTier, locationRiskCategory) 
   };
 }
 
+function getPlatformRiskMultiplier(deliveryPlatformNames = []) {
+  if (!Array.isArray(deliveryPlatformNames) || deliveryPlatformNames.length === 0) {
+    return PLATFORM_RISK_PREMIUM_MULTIPLIERS.OTHER;
+  }
+
+  const multipliers = deliveryPlatformNames.map((platformName) => {
+    const normalisedPlatformName = String(platformName).toUpperCase();
+    return PLATFORM_RISK_PREMIUM_MULTIPLIERS[normalisedPlatformName]
+      || PLATFORM_RISK_PREMIUM_MULTIPLIERS.OTHER;
+  });
+
+  const totalMultiplier = multipliers.reduce((runningTotal, multiplier) => {
+    return runningTotal + multiplier;
+  }, 0);
+
+  return totalMultiplier / multipliers.length;
+}
+
+function identifyPersonaEarningsBand(monthlyEarningsInRupees) {
+  const earnings = Number(monthlyEarningsInRupees) || 0;
+  const personaBands = Object.values(DELIVERY_PARTNER_PERSONA_EARNINGS_BANDS);
+
+  const matchedBand = personaBands.find((band) => {
+    const [minimum, maximum] = band.monthlyEarningsInRupeesRange;
+    return earnings >= minimum && earnings < maximum;
+  });
+
+  if (matchedBand) {
+    return matchedBand;
+  }
+
+  return DELIVERY_PARTNER_PERSONA_EARNINGS_BANDS.MID_TIER;
+}
+
+function calculateProjectedLossRatio({
+  weeklyPremiumInRupees,
+  weeklyCoverageInRupees,
+  expectedPayoutSeverityRatio = PREMIUM_MODEL_ASSUMPTIONS.EXPECTED_PAYOUT_SEVERITY_RATIO,
+}) {
+  if (weeklyPremiumInRupees <= 0) {
+    return 0;
+  }
+
+  const expectedWeeklyPayoutAmountInRupees = weeklyCoverageInRupees * expectedPayoutSeverityRatio;
+  return Number((expectedWeeklyPayoutAmountInRupees / weeklyPremiumInRupees).toFixed(2));
+}
+
+function calculateContextualWeeklyPremium({
+  selectedPlanTier,
+  locationRiskCategory,
+  deliveryPlatformNames,
+  averageMonthlyEarningsInRupees,
+}) {
+  const planConfiguration = getInsurancePlanConfiguration(selectedPlanTier);
+  const locationRiskMultiplier = getRiskMultiplierForLocationCategory(locationRiskCategory);
+  const platformRiskMultiplier = getPlatformRiskMultiplier(deliveryPlatformNames);
+  const earningsBand = identifyPersonaEarningsBand(averageMonthlyEarningsInRupees);
+
+  const weeklyEarningsEstimateInRupees = Math.round(
+    (earningsBand.averageDailyEarningsInRupees * PREMIUM_MODEL_ASSUMPTIONS.WORKING_DAYS_PER_WEEK)
+  );
+  const suggestedCoverageFromEarningsInRupees = Math.round(
+    weeklyEarningsEstimateInRupees
+      * PREMIUM_MODEL_ASSUMPTIONS.COVERAGE_PROTECTION_RATIO_OF_WEEKLY_EARNINGS
+  );
+
+  const basePremiumBeforeLoadings = planConfiguration.weeklyPremiumInRupees
+    * locationRiskMultiplier
+    * platformRiskMultiplier;
+  const adjustedWeeklyPremiumInRupees = Math.round(
+    basePremiumBeforeLoadings * (1 + PREMIUM_MODEL_ASSUMPTIONS.LOSS_RATIO_LOADING_FACTOR)
+  );
+
+  const projectedLossRatio = calculateProjectedLossRatio({
+    weeklyPremiumInRupees: adjustedWeeklyPremiumInRupees,
+    weeklyCoverageInRupees: planConfiguration.maximumCoverageInRupees,
+  });
+
+  const lossRatioAssessment = projectedLossRatio > LOSS_RATIO_GUARDRAILS.MAXIMUM_SUSTAINABLE_LOSS_RATIO
+    ? 'above_sustainable_band'
+    : projectedLossRatio < LOSS_RATIO_GUARDRAILS.MINIMUM_SUSTAINABLE_LOSS_RATIO
+      ? 'below_sustainable_band'
+      : 'within_sustainable_band';
+
+  return {
+    adjustedWeeklyPremiumInRupees,
+    maximumCoverageInRupees: planConfiguration.maximumCoverageInRupees,
+    pricingJustification: {
+      weeklyEarningsEstimateInRupees,
+      suggestedCoverageFromEarningsInRupees,
+      locationRiskMultiplier: Number(locationRiskMultiplier.toFixed(2)),
+      platformRiskMultiplier: Number(platformRiskMultiplier.toFixed(2)),
+      targetLossRatio: LOSS_RATIO_GUARDRAILS.TARGET_LOSS_RATIO,
+      projectedLossRatio,
+      lossRatioAssessment,
+    },
+  };
+}
+
 /**
  * Calculates the pro-rated daily premium for partial-week policy periods.
  *
@@ -108,7 +211,11 @@ function calculateProRatedPremiumForRemainingDays(
 
 module.exports = {
   calculateAdjustedWeeklyPremium,
+  calculateContextualWeeklyPremium,
+  calculateProjectedLossRatio,
   calculateProRatedPremiumForRemainingDays,
   getInsurancePlanConfiguration,
   getRiskMultiplierForLocationCategory,
+  getPlatformRiskMultiplier,
+  identifyPersonaEarningsBand,
 };

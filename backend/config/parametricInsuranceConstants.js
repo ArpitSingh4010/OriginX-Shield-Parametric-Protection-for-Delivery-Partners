@@ -49,6 +49,65 @@ const LOCATION_RISK_PREMIUM_MULTIPLIERS = {
 };
 
 /**
+ * Platform-specific multipliers based on observed volatility in order volume,
+ * interruption frequency, and earning consistency for delivery partners.
+ */
+const PLATFORM_RISK_PREMIUM_MULTIPLIERS = {
+  SWIGGY: 1.05,
+  ZOMATO: 1.03,
+  DUNZO: 1.1,
+  BLINKIT: 1.12,
+  OTHER: 1.0,
+};
+
+/**
+ * Persona earnings benchmarks (monthly and daily) used to justify plan
+ * suitability and recommended coverage caps.
+ */
+const DELIVERY_PARTNER_PERSONA_EARNINGS_BANDS = {
+  ENTRY_LEVEL: {
+    monthlyEarningsInRupeesRange: [15000, 22000],
+    averageDailyEarningsInRupees: 700,
+  },
+  MID_TIER: {
+    monthlyEarningsInRupeesRange: [22000, 32000],
+    averageDailyEarningsInRupees: 1000,
+  },
+  HIGH_ACTIVITY: {
+    monthlyEarningsInRupeesRange: [32000, 45000],
+    averageDailyEarningsInRupees: 1400,
+  },
+};
+
+/**
+ * Loss-ratio guardrails for pricing sustainability.
+ */
+const LOSS_RATIO_GUARDRAILS = {
+  TARGET_LOSS_RATIO: 0.65,
+  MAXIMUM_SUSTAINABLE_LOSS_RATIO: 0.8,
+  MINIMUM_SUSTAINABLE_LOSS_RATIO: 0.4,
+};
+
+/**
+ * Key assumptions for weekly premium justification and coverage adequacy.
+ */
+const PREMIUM_MODEL_ASSUMPTIONS = {
+  WORKING_DAYS_PER_WEEK: 6,
+  COVERAGE_PROTECTION_RATIO_OF_WEEKLY_EARNINGS: 0.5,
+  DEFAULT_EXPECTED_DISRUPTION_DAYS_PER_MONTH: 3,
+  EXPECTED_PAYOUT_SEVERITY_RATIO: 0.3,
+  LOSS_RATIO_LOADING_FACTOR: 0.1,
+};
+
+/**
+ * Exclusions that must be transparently declared in policy documentation.
+ */
+const COVERAGE_EXCLUSIONS = {
+  WAR_OR_HOSTILITIES: 'war_or_hostilities',
+  PANDEMIC_OR_EPIDEMIC: 'pandemic_or_epidemic',
+};
+
+/**
  * Possible states for an insurance claim throughout its lifecycle.
  */
 const INSURANCE_CLAIM_STATUSES = {
@@ -96,6 +155,11 @@ module.exports = {
   DISRUPTION_TRIGGER_THRESHOLDS,
   WEEKLY_INSURANCE_PLANS,
   LOCATION_RISK_PREMIUM_MULTIPLIERS,
+  PLATFORM_RISK_PREMIUM_MULTIPLIERS,
+  DELIVERY_PARTNER_PERSONA_EARNINGS_BANDS,
+  LOSS_RATIO_GUARDRAILS,
+  PREMIUM_MODEL_ASSUMPTIONS,
+  COVERAGE_EXCLUSIONS,
   INSURANCE_CLAIM_STATUSES,
   INSURANCE_POLICY_STATUSES,
   DISRUPTION_EVENT_TYPES,

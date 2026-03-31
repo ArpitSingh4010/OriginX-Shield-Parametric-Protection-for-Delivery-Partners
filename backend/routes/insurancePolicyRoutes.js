@@ -2,15 +2,22 @@
  * Express router for insurance policy subscription and management.
  *
  * Endpoints:
- *   POST /api/insurance-policies/subscribe  - Subscribe to a weekly plan
- *   GET  /api/insurance-policies/:policyId   - Fetch a specific policy
+ *   POST /api/insurance-policies/subscribe               - Subscribe to a weekly plan
+ *   GET  /api/insurance-policies/metadata/pricing-model  - Fetch model assumptions and exclusions
+ *   GET  /api/insurance-policies/:policyId               - Fetch a specific policy
  */
 
 const express = require('express');
 const InsurancePolicy = require('../models/InsurancePolicy');
 const DeliveryPartner = require('../models/DeliveryPartner');
-const { calculateAdjustedWeeklyPremium } = require('../services/weeklyPremiumCalculator');
-const { INSURANCE_POLICY_STATUSES } = require('../config/parametricInsuranceConstants');
+const {
+  calculateContextualWeeklyPremium,
+} = require('../services/weeklyPremiumCalculator');
+const {
+  INSURANCE_POLICY_STATUSES,
+  COVERAGE_EXCLUSIONS,
+  LOSS_RATIO_GUARDRAILS,
+} = require('../config/parametricInsuranceConstants');
 
 const insurancePolicyRouter = express.Router();
 
@@ -33,11 +40,16 @@ insurancePolicyRouter.post('/subscribe', async (request, response) => {
       });
     }
 
-    const { adjustedWeeklyPremiumInRupees, maximumCoverageInRupees } =
-      calculateAdjustedWeeklyPremium(
-        selectedPlanTier,
-        deliveryPartner.locationRiskCategory
-      );
+    const {
+      adjustedWeeklyPremiumInRupees,
+      maximumCoverageInRupees,
+      pricingJustification,
+    } = calculateContextualWeeklyPremium({
+      selectedPlanTier,
+      locationRiskCategory: deliveryPartner.locationRiskCategory,
+      deliveryPlatformNames: deliveryPartner.deliveryPlatformNames,
+      averageMonthlyEarningsInRupees: deliveryPartner.averageMonthlyEarningsInRupees,
+    });
 
     const policyStartDate = new Date();
     const policyEndDate = new Date();
@@ -52,6 +64,7 @@ insurancePolicyRouter.post('/subscribe', async (request, response) => {
       policyStartDate,
       policyEndDate,
       currentPolicyStatus: INSURANCE_POLICY_STATUSES.ACTIVE,
+      projectedLossRatioAtEnrollment: pricingJustification.projectedLossRatio,
     });
 
     const savedInsurancePolicy = await newInsurancePolicy.save();
@@ -69,6 +82,7 @@ insurancePolicyRouter.post('/subscribe', async (request, response) => {
         maximumWeeklyCoverageInRupees: savedInsurancePolicy.maximumWeeklyCoverageInRupees,
         policyStartDate: savedInsurancePolicy.policyStartDate,
         policyEndDate: savedInsurancePolicy.policyEndDate,
+        pricingJustification,
       },
     });
   } catch (policyCreationError) {
@@ -78,6 +92,22 @@ insurancePolicyRouter.post('/subscribe', async (request, response) => {
       errorDetails: policyCreationError.message,
     });
   }
+});
+
+/**
+ * GET /api/insurance-policies/metadata/pricing-model
+ *
+ * Returns reference metadata for premium model assumptions, exclusions,
+ * and regulatory context used by this prototype.
+ */
+insurancePolicyRouter.get('/metadata/pricing-model', (request, response) => {
+  return response.status(200).json({
+    success: true,
+    regulatoryNote:
+      'For real-world deployment, policy issuance and pricing must be validated through an IRDAI-licensed insurer partner.',
+    coverageExclusions: Object.values(COVERAGE_EXCLUSIONS),
+    lossRatioGuardrails: LOSS_RATIO_GUARDRAILS,
+  });
 });
 
 /**
