@@ -22,12 +22,20 @@ function setResponseOutput(payload) {
     typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
 }
 
+async function parseJsonSafely(response) {
+  try {
+    return await response.json();
+  } catch (error) {
+    return null;
+  }
+}
+
 async function requestJson(path) {
   const baseUrl = getApiBaseUrl();
   const response = await fetch(`${baseUrl}${path}`);
-  const data = await response.json();
+  const data = await parseJsonSafely(response);
   if (!response.ok) {
-    throw new Error(data.message || 'Request failed.');
+    throw new Error((data && data.message) || `Request failed with status ${response.status}.`);
   }
   return data;
 }
@@ -40,8 +48,12 @@ saveApiBaseUrlButton.addEventListener('click', () => {
 healthCheckButton.addEventListener('click', async () => {
   try {
     const baseUrl = getApiBaseUrl();
-    const response = await fetch(baseUrl.replace(/\/api$/, '') + '/api/health');
-    const data = await response.json();
+    const backendRootUrl = baseUrl.endsWith('/api') ? baseUrl.slice(0, -4) : baseUrl;
+    const response = await fetch(`${backendRootUrl}/api/health`);
+    const data = await parseJsonSafely(response);
+    if (!response.ok) {
+      throw new Error((data && data.message) || `Health check failed with status ${response.status}.`);
+    }
     setResponseOutput(data);
   } catch (error) {
     setResponseOutput({ success: false, error: error.message });
