@@ -7,22 +7,30 @@
 
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
 
 const { connectToDatabase } = require('./config/databaseConfig');
 const deliveryPartnerRouter = require('./routes/deliveryPartnerRoutes');
 const insurancePolicyRouter = require('./routes/insurancePolicyRoutes');
 const insuranceClaimRouter = require('./routes/insuranceClaimRoutes');
+const authRouter = require('./routes/authRoutes');
+const { requestLoggerStream } = require('./utils/logger');
+const { errorHandlerMiddleware } = require('./middleware/errorHandler');
 
 const HTTP_SERVER_PORT = process.env.PORT || 5000;
 
 const expressApplication = express();
 
 expressApplication.use(cors());
+expressApplication.use(helmet());
 expressApplication.use(express.json());
+expressApplication.use(morgan('combined', { stream: requestLoggerStream }));
 
 expressApplication.use('/api/delivery-partners', deliveryPartnerRouter);
 expressApplication.use('/api/insurance-policies', insurancePolicyRouter);
 expressApplication.use('/api/insurance-claims', insuranceClaimRouter);
+expressApplication.use('/api/auth', authRouter);
 
 /**
  * Health check endpoint used by monitoring tools and load balancers
@@ -35,6 +43,8 @@ expressApplication.get('/api/health', (request, response) => {
     serverTimestamp: new Date().toISOString(),
   });
 });
+
+expressApplication.use(errorHandlerMiddleware);
 
 /**
  * Starts the HTTP server after establishing a database connection.
@@ -51,9 +61,11 @@ async function startHttpServer() {
   });
 }
 
-startHttpServer().catch((serverStartupError) => {
-  console.error('Failed to start the HTTP server:', serverStartupError.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  startHttpServer().catch((serverStartupError) => {
+    console.error('Failed to start the HTTP server:', serverStartupError.message);
+    process.exit(1);
+  });
+}
 
 module.exports = expressApplication;

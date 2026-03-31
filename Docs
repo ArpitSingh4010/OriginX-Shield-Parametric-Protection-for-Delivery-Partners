@@ -1,70 +1,143 @@
-OriginX GigShield - Team Documentation (Current Project Status)
+OriginX GigShield - Complete Code Documentation
 
 1) Project Overview
-- Goal: Parametric insurance for delivery partners affected by disruptions (rainfall, heat, AQI, curfews, etc.).
-- Core idea: Automatic, trigger-based payouts with fraud controls and pricing logic.
+- Purpose: Parametric insurance system for delivery partners with automatic trigger-based claims.
+- Core modules:
+  - Frontend app (React + Tailwind CSS)
+  - Backend API (Node.js + Express + Mongoose)
+  - AI helpers (`ai/`) for risk and anomaly logic experiments.
 
-2) Current Build Status
-- Backend API: Implemented and test-covered for core pricing/fraud/disruption logic.
-- Frontend: Kickoff starter added in `frontend/` for immediate UI work and API connectivity checks.
-- AI scripts: Present in `ai/` for risk/anomaly experimentation.
+2) Frontend Documentation
 
-3) Implemented Backend APIs
+Location: `frontend/`
+
+Tech:
+- React (Vite)
+- Tailwind CSS
+- Vitest + Testing Library
+
+Main files:
+- `frontend/src/App.jsx`:
+  - API base URL configuration
+  - Optional auth token request (`/api/auth/token`)
+  - Registration flow form
+  - Subscription flow form
+  - Claim submission flow form
+  - Tracking dashboard panel for partner/policy/claim lookup
+  - Validation/loading/error UX
+- `frontend/src/index.css`: Tailwind directives
+- `frontend/tailwind.config.js`: content scan paths
+- `frontend/vite.config.js`: React plugin + jsdom test environment
+- `frontend/src/App.test.jsx`: UI smoke test for flow tabs
+
+Commands:
+- `cd frontend && npm install`
+- `npm run dev`
+- `npm run test`
+- `npm run build`
+
+3) Backend Documentation
+
+Location: `backend/`
+
+Core entry:
+- `backend/server.js`
+  - Middleware stack:
+    - CORS
+    - Helmet
+    - JSON parser
+    - Morgan request logs (via structured logger stream)
+    - Centralized error middleware
+  - Route mounts:
+    - `/api/auth`
+    - `/api/delivery-partners`
+    - `/api/insurance-policies`
+    - `/api/insurance-claims`
+    - `/api/health`
+
+Auth and validation:
+- `backend/routes/authRoutes.js`: issues JWT token
+- `backend/middleware/authMiddleware.js`: bearer token verification
+- `backend/middleware/optionalAuth.js`: enforces auth only when `ENFORCE_AUTH=true`
+- `backend/middleware/validationMiddleware.js`: request validation result handler
+- `backend/validators/requestValidators.js`: input validation rules for all main endpoints
+
+Observability and resiliency:
+- `backend/utils/logger.js`: structured logs
+- `backend/services/retryExecutor.js`: retry wrapper for transient operation failures
+
+Payout wiring:
+- `backend/services/payoutService.js`
+  - `PAYOUT_MODE=mock` -> simulated payout transaction id
+  - `PAYOUT_MODE=disabled` -> blocks payout by configuration
+- Integrated in claim approval flow via `backend/services/claimProcessingService.js`
+
+4) Database Documentation (MongoDB + Mongoose Models)
+
+- `backend/models/DeliveryPartner.js`
+  - identity/contact fields, city + coordinates, platform list, risk category, policy linkage
+- `backend/models/InsurancePolicy.js`
+  - plan tier, premium, max/remaining coverage, active window, status, loss-ratio metadata, exclusions
+- `backend/models/InsuranceClaim.js`
+  - associated partner/policy/event, claim status, requested/approved payout, fraud metadata, payout reference
+- `backend/models/DisruptionEvent.js`
+  - disruption type, geo impact zone, measurements, exclusion tag, aggregate payout tracking
+
+Database config:
+- `backend/config/databaseConfig.js`
+  - uses `MONGODB_URI`, fallback `mongodb://localhost:27017/gigshield`
+
+5) API Documentation
+
+Auth:
+- `POST /api/auth/token`
+  - body: `{ username, password }`
+  - response: `{ accessToken, tokenType, expiresIn }`
+
+Delivery Partner:
 - `POST /api/delivery-partners/register`
 - `GET /api/delivery-partners/:partnerId`
+
+Insurance Policy:
 - `POST /api/insurance-policies/subscribe`
 - `GET /api/insurance-policies/metadata/pricing-model`
 - `GET /api/insurance-policies/:policyId`
+
+Insurance Claim:
 - `POST /api/insurance-claims/submit`
 - `GET /api/insurance-claims/:claimId`
+
+Health:
 - `GET /api/health`
 
-4) Frontend Kickoff (Now Added)
-- Files:
-  - `frontend/index.html`
-  - `frontend/styles.css`
-  - `frontend/app.js`
-- Purpose:
-  - Start frontend immediately
-  - Configure backend API URL
-  - Run health check and pricing metadata checks
-  - Provide clear next-task checklist for frontend team
+6) Quality and CI/CD
 
-5) What Is Left (Execution Checklist)
-- Frontend:
-  - Registration UI
-  - Plan subscription UI
-  - Claim submission UI
-  - Claim/policy tracking dashboard
-  - Validation, loading/error states, responsive polish
-- Backend hardening:
-  - AuthN/AuthZ
-  - Request validation middleware
-  - Production payment/payout flow
-  - Better logging/monitoring and resilient background jobs
-- Quality & DevOps:
-  - API integration tests
-  - Frontend tests once screens are built
-  - CI for lint/test/build
-  - Deployment + secrets management
+Backend tests:
+- `cd backend && npm test`
+- Includes existing service tests + new auth/validation/retry tests
 
-6) Local Run Steps
-- Backend
-  - `cd backend`
-  - `npm install`
-  - `npm test`
-  - `npm run dev`
-- Frontend starter
-  - Open `frontend/index.html` in browser or serve repository statically
-  - Set API base URL (default `http://localhost:5000/api`)
+Frontend tests:
+- `cd frontend && npm run test`
 
-7) Suggested Team Work Split
-- Frontend Team:
-  - Build complete flows and component structure
-  - Integrate all API endpoints
-  - Add user-friendly error/loading UX
-- Backend Team:
-  - Add authentication + request validation
-  - Complete payment flow and operational controls
-- QA/DevOps:
-  - Add integration tests and CI/CD pipeline
+CI workflow:
+- `.github/workflows/ci.yml`
+  - backend install + tests
+  - frontend install + tests + build
+
+7) Deployment + Secrets Checklist
+
+Required env vars:
+- `MONGODB_URI`
+- `PORT`
+- `JWT_SECRET_KEY`
+- `ENFORCE_AUTH`
+- `AUTH_DEMO_USERNAME`
+- `AUTH_DEMO_PASSWORD_HASH` (preferred) / `AUTH_DEMO_PASSWORD`
+- `PAYOUT_MODE`
+- `WEATHER_API_KEY`
+- `POLLUTION_API_KEY`
+
+Security guidance:
+- Keep all secrets in environment/config stores
+- Do not commit credentials to repository
+- Configure CI with secret variables and minimal scope tokens

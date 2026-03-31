@@ -18,6 +18,12 @@ const {
   COVERAGE_EXCLUSIONS,
   LOSS_RATIO_GUARDRAILS,
 } = require('../config/parametricInsuranceConstants');
+const {
+  subscribePolicyValidators,
+  policyIdParamValidators,
+} = require('../validators/requestValidators');
+const { validateIncomingRequest } = require('../middleware/validationMiddleware');
+const { requireAuthIfEnabled } = require('../middleware/optionalAuth');
 
 const insurancePolicyRouter = express.Router();
 
@@ -28,7 +34,12 @@ const insurancePolicyRouter = express.Router();
  * Calculates the adjusted premium based on the partner's location
  * risk category and creates a policy valid for 7 days.
  */
-insurancePolicyRouter.post('/subscribe', async (request, response) => {
+insurancePolicyRouter.post(
+  '/subscribe',
+  requireAuthIfEnabled,
+  subscribePolicyValidators,
+  validateIncomingRequest,
+  async (request, response) => {
   try {
     const { deliveryPartnerId, selectedPlanTier } = request.body;
 
@@ -92,7 +103,8 @@ insurancePolicyRouter.post('/subscribe', async (request, response) => {
       errorDetails: policyCreationError.message,
     });
   }
-});
+}
+);
 
 /**
  * GET /api/insurance-policies/metadata/pricing-model
@@ -100,7 +112,10 @@ insurancePolicyRouter.post('/subscribe', async (request, response) => {
  * Returns reference metadata for premium model assumptions, exclusions,
  * and regulatory context used by this prototype.
  */
-insurancePolicyRouter.get('/metadata/pricing-model', (request, response) => {
+insurancePolicyRouter.get(
+  '/metadata/pricing-model',
+  requireAuthIfEnabled,
+  (request, response) => {
   return response.status(200).json({
     success: true,
     regulatoryNote:
@@ -108,14 +123,20 @@ insurancePolicyRouter.get('/metadata/pricing-model', (request, response) => {
     coverageExclusions: Object.values(COVERAGE_EXCLUSIONS),
     lossRatioGuardrails: LOSS_RATIO_GUARDRAILS,
   });
-});
+}
+);
 
 /**
  * GET /api/insurance-policies/:policyId
  *
  * Retrieves details of a specific insurance policy by its ID.
  */
-insurancePolicyRouter.get('/:policyId', async (request, response) => {
+insurancePolicyRouter.get(
+  '/:policyId',
+  requireAuthIfEnabled,
+  policyIdParamValidators,
+  validateIncomingRequest,
+  async (request, response) => {
   try {
     const { policyId } = request.params;
 
@@ -141,6 +162,7 @@ insurancePolicyRouter.get('/:policyId', async (request, response) => {
       errorDetails: policyFetchError.message,
     });
   }
-});
+}
+);
 
 module.exports = insurancePolicyRouter;

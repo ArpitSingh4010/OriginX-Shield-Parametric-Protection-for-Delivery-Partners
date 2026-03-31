@@ -360,78 +360,146 @@ Key API outputs for verification:
 - `POST /api/insurance-policies/subscribe` now returns `pricingJustification`
 - `GET /api/insurance-policies/metadata/pricing-model` returns exclusions, loss-ratio guardrails, and IRDAI deployment note
 
-## 20. Frontend Kickoff (Started)
+## 20. Frontend Implementation (React + Tailwind CSS)
 
-The backend APIs and core model logic are in place.  
-To start frontend implementation immediately, a minimal web UI scaffold is now added under:
+The frontend is now implemented in React with Tailwind CSS and includes all primary user flows:
 
-- `frontend/index.html`
-- `frontend/styles.css`
-- `frontend/app.js`
+- Delivery partner registration
+- Plan subscription
+- Claim submission
+- Policy/claim tracking dashboard
+- Validation + loading + error feedback UX
 
-This starter UI helps the team quickly:
+Frontend location:
 
-1. Understand available API flows
-2. Configure backend API base URL from the browser
-3. Try health checks and sample requests while building full React screens later
+- `frontend/src/App.jsx` (main app + flow forms)
+- `frontend/src/index.css` (Tailwind entry)
+- `frontend/tailwind.config.js`
+- `frontend/postcss.config.js`
 
-> Current scaffold is intentionally lightweight (plain HTML/CSS/JS) so the team can align on UX and API integration before final framework-heavy implementation.
+Run frontend locally:
 
-## 21. What Is Left to Complete the Project
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-### A) Frontend Work (Primary Pending Area)
+Build and test frontend:
 
-- Build full user flows:
-  - Delivery partner registration
-  - Policy subscription with plan selection
-  - Claim submission
-  - Claim/policy status tracking dashboard
-- Add form validations and user-friendly error states
-- Add loading and retry handling for API/network failures
-- Add role-based screens (partner/admin) if needed for review workflows
+```bash
+npm run test
+npm run build
+```
 
-### B) Backend Items Still Needed for Production Readiness
+## 21. Backend Hardening Updates
 
-- Authentication and authorization (currently open APIs)
-- Request validation middleware for all route payloads
-- Real payment/payout integration flow completion (Razorpay sandbox -> production flow)
-- Background/scheduled disruption ingestion pipeline hardening
-- Better operational logging and error observability
+The backend now includes production-hardening foundations:
 
-### C) Data, AI, and Automation
+1. Authentication/authorization scaffolding
+   - `POST /api/auth/token` issues JWT token
+   - Optional route protection via `ENFORCE_AUTH=true`
+   - Middleware:
+     - `backend/middleware/authMiddleware.js`
+     - `backend/middleware/optionalAuth.js`
 
-- Train and evaluate anomaly/risk models using larger real-world datasets
-- Add model monitoring and drift checks
-- Add auto-trigger orchestration for large-area disruptions with safe rate controls
+2. Request validation middleware
+   - `backend/middleware/validationMiddleware.js`
+   - Validators in `backend/validators/requestValidators.js`
+   - Applied to delivery partner, policy, and claim routes
 
-### D) Quality, Security, and DevOps
+3. Payout wiring abstraction
+   - `backend/services/payoutService.js`
+   - Supports `PAYOUT_MODE=mock|disabled` and claim payout hook integration
 
-- API integration tests (end-to-end flows)
-- Frontend unit/integration tests once full UI is built
-- CI pipeline for lint/test/build
-- Deployment setup (backend + frontend + MongoDB + secrets management)
-- Security hardening: auth, rate limits, audit trails, and compliance artifacts
+4. Observability/logging and resilience
+   - `helmet` security headers
+   - `morgan` request logging to structured logger
+   - `backend/utils/logger.js`
+   - Retry helper `backend/services/retryExecutor.js`
 
-### E) Documentation and Team Handover
+## 22. Quality, Tests, and CI/CD
 
-- Keep API contracts/versioning synchronized with frontend usage
-- Maintain architecture and workflow docs as modules evolve
-- Add deployment runbook and incident response notes
-
-## 22. Team Quickstart
-
-### Backend
+### Backend tests
 
 ```bash
 cd backend
 npm install
 npm test
-npm run dev
 ```
 
-Default backend URL: `http://localhost:5000`
+Includes new tests for:
 
-### Frontend Starter
+- auth enforcement middleware
+- request validation behavior
+- retry execution behavior
 
-Open `frontend/index.html` in browser (or serve folder using any static server).  
-Set API base URL in UI (default: `http://localhost:5000/api`) and use quick actions to test connectivity.
+### Frontend tests
+
+```bash
+cd frontend
+npm install
+npm run test
+```
+
+### CI workflow
+
+A CI workflow is added at:
+
+- `.github/workflows/ci.yml`
+
+It runs:
+- backend install + tests
+- frontend install + tests + build
+
+## 23. API Reference (Current)
+
+### Auth
+- `POST /api/auth/token`
+
+### Delivery Partner
+- `POST /api/delivery-partners/register`
+- `GET /api/delivery-partners/:partnerId`
+
+### Insurance Policy
+- `POST /api/insurance-policies/subscribe`
+- `GET /api/insurance-policies/metadata/pricing-model`
+- `GET /api/insurance-policies/:policyId`
+
+### Insurance Claim
+- `POST /api/insurance-claims/submit`
+- `GET /api/insurance-claims/:claimId`
+
+### Health
+- `GET /api/health`
+
+## 24. Database Models (MongoDB/Mongoose)
+
+Defined in:
+
+- `backend/models/DeliveryPartner.js`
+- `backend/models/InsurancePolicy.js`
+- `backend/models/InsuranceClaim.js`
+- `backend/models/DisruptionEvent.js`
+
+These models cover partner onboarding, weekly policy lifecycle, claim lifecycle, and disruption triggers.
+
+## 25. Deployment and Secrets Guide
+
+Minimum production env vars:
+
+- `MONGODB_URI`
+- `PORT`
+- `JWT_SECRET_KEY`
+- `ENFORCE_AUTH` (`true`/`false`)
+- `AUTH_DEMO_USERNAME` (for prototype auth endpoint)
+- `AUTH_DEMO_PASSWORD_HASH` (preferred) or `AUTH_DEMO_PASSWORD`
+- `PAYOUT_MODE` (`mock` for prototype, replace with real gateway integration mode later)
+- `WEATHER_API_KEY`
+- `POLLUTION_API_KEY`
+
+Security notes:
+
+- Do not hardcode secrets in code
+- Use GitHub repository secrets for CI/CD
+- Use environment-level secret stores in deployment platform

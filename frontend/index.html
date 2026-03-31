@@ -2,49 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GigShield Frontend Starter</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <title>frontend</title>
   </head>
   <body>
-    <main class="container">
-      <h1>GigShield Frontend Starter</h1>
-      <p class="subtitle">
-        Frontend phase started. Use this page to quickly verify backend API connectivity and flow basics.
-      </p>
-
-      <section class="card">
-        <h2>API Configuration</h2>
-        <label for="apiBaseUrl">API Base URL</label>
-        <input id="apiBaseUrl" type="text" value="http://localhost:5000/api" />
-        <button id="saveApiBaseUrlButton" type="button">Save API URL</button>
-      </section>
-
-      <section class="card">
-        <h2>Quick Actions</h2>
-        <div class="actions">
-          <button id="healthCheckButton" type="button">Run Health Check</button>
-          <button id="pricingMetadataButton" type="button">Get Pricing Metadata</button>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>Response</h2>
-        <pre id="responseOutput">No request made yet.</pre>
-      </section>
-
-      <section class="card">
-        <h2>Frontend Next Tasks</h2>
-        <ul>
-          <li>Create registration flow UI</li>
-          <li>Create plan subscription flow UI</li>
-          <li>Create claim submission flow UI</li>
-          <li>Create claim and policy status dashboard</li>
-          <li>Add validations, loading states, and error handling</li>
-        </ul>
-      </section>
-    </main>
-
-    <script src="./app.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

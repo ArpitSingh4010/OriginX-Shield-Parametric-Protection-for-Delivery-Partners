@@ -9,6 +9,12 @@
 const express = require('express');
 const InsuranceClaim = require('../models/InsuranceClaim');
 const { processIncomingInsuranceClaim } = require('../services/claimProcessingService');
+const {
+  submitClaimValidators,
+  claimIdParamValidators,
+} = require('../validators/requestValidators');
+const { validateIncomingRequest } = require('../middleware/validationMiddleware');
+const { requireAuthIfEnabled } = require('../middleware/optionalAuth');
 
 const insuranceClaimRouter = express.Router();
 
@@ -19,7 +25,12 @@ const insuranceClaimRouter = express.Router();
  * disruption event.  Runs fraud verification and either auto-approves
  * or escalates the claim for manual review.
  */
-insuranceClaimRouter.post('/submit', async (request, response) => {
+insuranceClaimRouter.post(
+  '/submit',
+  requireAuthIfEnabled,
+  submitClaimValidators,
+  validateIncomingRequest,
+  async (request, response) => {
   try {
     const {
       deliveryPartnerId,
@@ -64,14 +75,20 @@ insuranceClaimRouter.post('/submit', async (request, response) => {
       errorDetails: claimSubmissionError.message,
     });
   }
-});
+}
+);
 
 /**
  * GET /api/insurance-claims/:claimId
  *
  * Retrieves the full details and current status of an insurance claim.
  */
-insuranceClaimRouter.get('/:claimId', async (request, response) => {
+insuranceClaimRouter.get(
+  '/:claimId',
+  requireAuthIfEnabled,
+  claimIdParamValidators,
+  validateIncomingRequest,
+  async (request, response) => {
   try {
     const { claimId } = request.params;
 
@@ -98,6 +115,7 @@ insuranceClaimRouter.get('/:claimId', async (request, response) => {
       errorDetails: claimFetchError.message,
     });
   }
-});
+}
+);
 
 module.exports = insuranceClaimRouter;

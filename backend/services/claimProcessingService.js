@@ -23,6 +23,8 @@ const {
   calculateDisruptionSeverityRatio,
   determineCompensationAmountForDisruption,
 } = require('./disruptionThresholdChecker');
+const { triggerPayoutForApprovedClaim } = require('./payoutService');
+const { executeWithRetries } = require('./retryExecutor');
 
 const EXCLUSION_TAG_LABELS = {
   war_or_hostilities: 'war or hostile operations',
@@ -103,10 +105,25 @@ async function createPendingInsuranceClaim(claimInitialisationData) {
 async function approveClaimAndDeductFromPolicyCoverage(
   insuranceClaim,
   activeInsurancePolicy,
-  approvedPayoutAmountInRupees
+  approvedPayoutAmountInRupees,
+  deliveryPartnerId
 ) {
+  const payoutResult = await executeWithRetries(
+    () => triggerPayoutForApprovedClaim({
+      claimId: insuranceClaim._id.toString(),
+      deliveryPartnerId,
+      payoutAmountInRupees: approvedPayoutAmountInRupees,
+    }),
+    {
+      maxAttempts: 3,
+      retryDelayInMilliseconds: 150,
+    }
+  );
+
   insuranceClaim.approvedPayoutAmountInRupees = approvedPayoutAmountInRupees;
-  insuranceClaim.currentClaimStatus = INSURANCE_CLAIM_STATUSES.APPROVED_FOR_PAYOUT;
+  insuranceClaim.currentClaimStatus = INSURANCE_CLAIM_STATUSES.PAYOUT_PROCESSED;
+  insuranceClaim.payoutProcessedTimestamp = new Date();
+  insuranceClaim.razorpayPayoutTransactionId = payoutResult.payoutTransactionId;
   await insuranceClaim.save();
 
   activeInsurancePolicy.remainingCoverageInRupees -= approvedPayoutAmountInRupees;
@@ -232,7 +249,8 @@ async function processIncomingInsuranceClaim(incomingClaimRequestData) {
   const approvedClaim = await approveClaimAndDeductFromPolicyCoverage(
     pendingClaim,
     activeInsurancePolicy,
-    requestedCompensationAmountInRupees
+    requestedCompensationAmountInRupees,
+    deliveryPartnerId
   );
 
   return { claim: approvedClaim, wasAutoApproved: true };

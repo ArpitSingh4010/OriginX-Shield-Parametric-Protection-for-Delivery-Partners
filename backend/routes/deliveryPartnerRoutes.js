@@ -8,6 +8,12 @@
 
 const express = require('express');
 const DeliveryPartner = require('../models/DeliveryPartner');
+const {
+  deliveryPartnerRegistrationValidators,
+  deliveryPartnerIdParamValidators,
+} = require('../validators/requestValidators');
+const { validateIncomingRequest } = require('../middleware/validationMiddleware');
+const { requireAuthIfEnabled } = require('../middleware/optionalAuth');
 
 const deliveryPartnerRouter = express.Router();
 
@@ -18,7 +24,12 @@ const deliveryPartnerRouter = express.Router();
  * The request body must include name, email, phone, city, coordinates,
  * and at least one delivery platform.
  */
-deliveryPartnerRouter.post('/register', async (request, response) => {
+deliveryPartnerRouter.post(
+  '/register',
+  requireAuthIfEnabled,
+  deliveryPartnerRegistrationValidators,
+  validateIncomingRequest,
+  async (request, response) => {
   try {
     const {
       fullName,
@@ -68,14 +79,20 @@ deliveryPartnerRouter.post('/register', async (request, response) => {
       errorDetails: registrationError.message,
     });
   }
-});
+}
+);
 
 /**
  * GET /api/delivery-partners/:partnerId
  *
  * Retrieves the profile of a registered delivery partner by their ID.
  */
-deliveryPartnerRouter.get('/:partnerId', async (request, response) => {
+deliveryPartnerRouter.get(
+  '/:partnerId',
+  requireAuthIfEnabled,
+  deliveryPartnerIdParamValidators,
+  validateIncomingRequest,
+  async (request, response) => {
   try {
     const { partnerId } = request.params;
 
@@ -101,6 +118,7 @@ deliveryPartnerRouter.get('/:partnerId', async (request, response) => {
       errorDetails: profileFetchError.message,
     });
   }
-});
+}
+);
 
 module.exports = deliveryPartnerRouter;
