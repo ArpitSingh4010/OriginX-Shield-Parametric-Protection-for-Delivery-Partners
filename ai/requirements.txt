@@ -1,4 +1,4 @@
-﻿# RakshaRide AI Server â€” Python Dependencies
+﻿# GigShield AI Server â€” Python Dependencies
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Install with:   pip install -r requirements.txt
 # Start with:     python app.py
@@ -7,4 +7,5 @@
 
 flask>=3.0.0
 flask-cors>=4.0.0
+
 

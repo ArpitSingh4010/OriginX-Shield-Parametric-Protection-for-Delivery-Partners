@@ -1,5 +1,5 @@
 ﻿"""
-Anomaly detection module for the RakshaRide fraud prevention system.
+Anomaly detection module for the GigShield fraud prevention system.
 
 Analyses claim submissions to identify patterns that deviate significantly
 from established norms, flagging potentially fraudulent activity before
@@ -281,4 +281,5 @@ def run_anomaly_detection_checks_for_claim(
         should_flag_for_manual_review=should_flag_for_manual_review,
         anomaly_detection_notes=detection_notes,
     )
+
 

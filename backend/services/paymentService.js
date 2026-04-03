@@ -3,7 +3,7 @@
  *
  * Handles two separate payment flows:
  *   1. Premium collection  â€” worker pays weekly premium via Razorpay Order + Checkout.
- *   2. Claim payout        â€” RakshaRide transfers compensation to worker's bank account
+ *   2. Claim payout        â€” GigShield transfers compensation to worker's bank account
  *                            via Razorpay Payouts API.
  *
  * STUB MODE
@@ -114,7 +114,7 @@ function makeRazorpayApiRequest(method, apiPath, body) {
   });
 }
 
-// â”€â”€â”€ Premium Collection (Worker â†’ RakshaRide) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€ Premium Collection (Worker â†’ GigShield) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Creates a Razorpay Order for collecting the weekly insurance premium.
@@ -198,7 +198,7 @@ function verifyPremiumPayment(
   return { isVerified, paymentId: razorpayPaymentId, isStub: false };
 }
 
-// â”€â”€â”€ Claim Payout (RakshaRide â†’ Worker) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€ Claim Payout (GigShield â†’ Worker) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Initiates a bank transfer payout to the delivery partner using the
@@ -207,9 +207,9 @@ function verifyPremiumPayment(
  * Flow:
  *   1. Create a Contact (represents the beneficiary).
  *   2. Create a Fund Account linked to that Contact.
- *   3. Create a Payout from the RakshaRide settlement account to the Fund Account.
+ *   3. Create a Payout from the GigShield settlement account to the Fund Account.
  *
- * Requires RAZORPAY_ACCOUNT_NUMBER to be set (the RakshaRide current account
+ * Requires RAZORPAY_ACCOUNT_NUMBER to be set (the GigShield current account
  * registered with Razorpay).  Without it the function falls back to stub mode.
  *
  * @param {number} amountInRupees    - Compensation amount in INR.
@@ -242,7 +242,7 @@ async function initiateClaimPayout(amountInRupees, claimId, beneficiaryDetails =
 
   // Step 1 â€” Create a Razorpay Contact for the worker.
   const razorpayContact = await makeRazorpayApiRequest('POST', '/v1/contacts', {
-    name: beneficiaryDetails.accountHolderName || 'RakshaRide Worker',
+    name: beneficiaryDetails.accountHolderName || 'GigShield Worker',
     type: 'employee',
     reference_id: `worker_${claimId}`,
   });
@@ -255,7 +255,7 @@ async function initiateClaimPayout(amountInRupees, claimId, beneficiaryDetails =
       contact_id: razorpayContact.id,
       account_type: 'bank_account',
       bank_account: {
-        name: beneficiaryDetails.accountHolderName || 'RakshaRide Worker',
+        name: beneficiaryDetails.accountHolderName || 'GigShield Worker',
         ifsc: beneficiaryDetails.ifscCode,
         account_number: beneficiaryDetails.accountNumber,
       },
@@ -272,7 +272,7 @@ async function initiateClaimPayout(amountInRupees, claimId, beneficiaryDetails =
     purpose: 'payout',
     queue_if_low_balance: true,
     reference_id: claimId,
-    narration: `RakshaRide claim payout ${claimId}`,
+    narration: `GigShield claim payout ${claimId}`,
   });
 
   return {
@@ -292,4 +292,5 @@ module.exports = {
   initiateClaimPayout,
   IS_PAYMENT_STUB_MODE,
 };
+
 

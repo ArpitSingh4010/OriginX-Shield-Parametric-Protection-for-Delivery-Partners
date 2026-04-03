@@ -1,5 +1,5 @@
 ﻿"""
-Risk assessment module for the RakshaRide parametric insurance platform.
+Risk assessment module for the GigShield parametric insurance platform.
 
 Calculates a location-based risk score for each delivery zone by analysing:
   - Historical frequency of weather disruptions in the area
@@ -242,4 +242,5 @@ def assess_delivery_zone_risk_profile(
         assigned_risk_category=assigned_risk_category,
         historical_disruption_records=historical_disruption_records,
     )
+
 

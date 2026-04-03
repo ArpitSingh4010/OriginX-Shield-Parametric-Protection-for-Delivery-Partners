@@ -1,5 +1,5 @@
 ﻿/**
- * Main Express application entry point for the RakshaRide backend.
+ * Main Express application entry point for the GigShield backend.
  *
  * Initialises middleware, registers API route handlers, starts
  * weather monitoring, and begins listening for HTTP requests.
@@ -57,7 +57,7 @@ expressApplication.post('/api/admin/trigger-weather-check', async (req, res) => 
 expressApplication.get('/', (request, response) => {
   response.status(200).json({
     status: 'ok',
-    serviceName: 'RakshaRide Parametric Insurance API',
+    serviceName: 'GigShield Parametric Insurance API',
     message: 'Backend is running. Use /api/health for detailed health status.',
   });
 });
@@ -65,7 +65,7 @@ expressApplication.get('/', (request, response) => {
 expressApplication.get('/api/health', (request, response) => {
   response.status(200).json({
     status:          'healthy',
-    serviceName:     'RakshaRide Parametric Insurance API',
+    serviceName:     'GigShield Parametric Insurance API',
     serverTimestamp: new Date().toISOString(),
     environment:     process.env.NODE_ENV || 'development',
     paymentMode:     require('./services/paymentService').IS_PAYMENT_STUB_MODE ? 'stub' : 'live',
@@ -88,7 +88,7 @@ async function startHttpServer() {
   await connectToDatabase();
 
   expressApplication.listen(HTTP_SERVER_PORT, () => {
-    console.log(`âœ…  RakshaRide API server running on port ${HTTP_SERVER_PORT}`);
+    console.log(`âœ…  GigShield API server running on port ${HTTP_SERVER_PORT}`);
     console.log(`    Environment : ${process.env.NODE_ENV || 'development'}`);
     console.log(`    Payment mode: ${require('./services/paymentService').IS_PAYMENT_STUB_MODE ? 'STUB' : 'LIVE'}`);
   });
@@ -105,4 +105,5 @@ if (require.main === module) {
 }
 
 module.exports = expressApplication;
+
 

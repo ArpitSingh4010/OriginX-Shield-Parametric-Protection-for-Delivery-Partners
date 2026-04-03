@@ -1,4 +1,4 @@
-﻿OriginX RakshaRide - Complete Code Documentation
+﻿OriginX GigShield - Complete Code Documentation
 
 1) Project Overview
 - Purpose: Parametric insurance system for delivery partners with automatic trigger-based claims.
@@ -75,7 +75,7 @@ Payout wiring:
 
 Database config:
 - `backend/config/databaseConfig.js`
-  - uses `MONGODB_URI`, fallback `mongodb://localhost:27017/raksharide`
+  - uses `MONGODB_URI`, fallback `mongodb://localhost:27017/gigshield`
 
 5) API Documentation
 
@@ -138,4 +138,5 @@ Security guidance:
 - Keep all secrets in environment/config stores
 - Do not commit credentials to repository
 - Configure CI with secret variables and minimal scope tokens
+
 

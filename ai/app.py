@@ -1,5 +1,5 @@
 ﻿"""
-RakshaRide AI Server â€” Flask REST API
+GigShield AI Server â€” Flask REST API
 
 Exposes the existing Python AI modules (risk_assessment.py and
 anomaly_detector.py) as HTTP endpoints so the Node.js backend and
@@ -47,7 +47,7 @@ AI_SERVICE_PUBLIC_BASE_URL = os.environ.get(
 def root():
     return jsonify({
         'status': 'ok',
-        'service': 'RakshaRide AI Server',
+        'service': 'GigShield AI Server',
         'message': 'AI service is running. Use /health for health checks.',
     })
 
@@ -55,7 +55,7 @@ def root():
 def health():
     return jsonify({
         'status': 'healthy',
-        'service': 'RakshaRide AI Server',
+        'service': 'GigShield AI Server',
         'port': AI_SERVICE_PORT,
     })
 
@@ -289,6 +289,7 @@ def quick_risk_assess():
 # â”€â”€â”€ Entry Point â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 if __name__ == '__main__':
-    print(f'RakshaRide AI Server starting on {AI_SERVICE_PUBLIC_BASE_URL}')
+    print(f'GigShield AI Server starting on {AI_SERVICE_PUBLIC_BASE_URL}')
     app.run(host=AI_SERVICE_HOST, port=AI_SERVICE_PORT, debug=AI_SERVICE_DEBUG)
+
 

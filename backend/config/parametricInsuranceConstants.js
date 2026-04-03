@@ -2,7 +2,7 @@
  * Parametric trigger thresholds that determine when a disruption event
  * is severe enough to automatically initiate a payout for delivery partners.
  *
- * Values are based on the RakshaRide policy specification:
+ * Values are based on the GigShield policy specification:
  *   - Rainfall threshold: 50 mm triggers compensation for heavy rain
  *   - Temperature threshold: 42 Â°C triggers compensation for extreme heat
  *   - AQI threshold: 300 triggers compensation for hazardous air quality
@@ -191,4 +191,5 @@ module.exports = {
   SEASONAL_RISK_PREMIUM_MULTIPLIERS,
   RISK_CONTROL_LIMITS,
 };
+
 
