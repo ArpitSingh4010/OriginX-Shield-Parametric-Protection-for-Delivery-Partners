@@ -3,9 +3,9 @@ OriginX GigShield - Complete Code Documentation
 1) Project Overview
 - Purpose: Parametric insurance system for delivery partners with automatic trigger-based claims.
 - Core modules:
-  - Frontend app (React + Tailwind CSS)
+  - Frontend app (React + Vite + React Router)
   - Backend API (Node.js + Express + Mongoose)
-  - AI helpers (`ai/`) for risk and anomaly logic experiments.
+  - AI service (`ai/`) for risk and anomaly scoring endpoints.
 
 2) Frontend Documentation
 
@@ -13,28 +13,22 @@ Location: `frontend/`
 
 Tech:
 - React (Vite)
-- Tailwind CSS
-- Vitest + Testing Library
+- React Router
+- Custom CSS (`frontend/src/index.css`)
 
 Main files:
 - `frontend/src/App.jsx`:
-  - API base URL configuration
-  - Optional auth token request (`/api/auth/token`)
-  - Registration flow form
-  - Subscription flow form
-  - Claim submission flow form
-  - Tracking dashboard panel for partner/policy/claim lookup
-  - Validation/loading/error UX
-- `frontend/src/index.css`: Tailwind directives
-- `frontend/tailwind.config.js`: content scan paths
-- `frontend/vite.config.js`: React plugin + jsdom test environment
-- `frontend/src/App.test.jsx`: UI smoke test for flow tabs
+  - App route setup (`/`, `/register`, `/dashboard`, `/admin`)
+  - Admin route access gating via `VITE_ADMIN_ACCESS_KEY`
+- `frontend/src/pages/*`: page-level UI flows (Landing, Register, Dashboard, Admin)
+- `frontend/src/components/*`: shared UI components
+- `frontend/vite.config.js`: React plugin + dev proxy for `/api` and `/ai`
 
 Commands:
 - `cd frontend && npm install`
 - `npm run dev`
-- `npm run test`
 - `npm run build`
+- `npm run preview`
 
 3) Backend Documentation
 
@@ -44,44 +38,40 @@ Core entry:
 - `backend/server.js`
   - Middleware stack:
     - CORS
-    - Helmet
     - JSON parser
-    - Morgan request logs (via structured logger stream)
-    - Centralized error middleware
   - Route mounts:
     - `/api/auth`
     - `/api/delivery-partners`
     - `/api/insurance-policies`
     - `/api/insurance-claims`
+    - `/api/disruption-events`
     - `/api/health`
+  - Admin utility endpoint:
+    - `POST /api/admin/trigger-weather-check`
 
 Auth and validation:
 - `backend/routes/authRoutes.js`: issues JWT token
 - `backend/middleware/authMiddleware.js`: bearer token verification
 - `backend/middleware/optionalAuth.js`: enforces auth only when `ENFORCE_AUTH=true`
 - `backend/middleware/validationMiddleware.js`: request validation result handler
-- `backend/validators/requestValidators.js`: input validation rules for all main endpoints
-
-Observability and resiliency:
-- `backend/utils/logger.js`: structured logs
-- `backend/services/retryExecutor.js`: retry wrapper for transient operation failures
+- `backend/validators/requestValidators.js`: input validation rules for partner/policy/claim endpoints
 
 Payout wiring:
-- `backend/services/payoutService.js`
-  - `PAYOUT_MODE=mock` -> simulated payout transaction id
-  - `PAYOUT_MODE=disabled` -> blocks payout by configuration
-- Integrated in claim approval flow via `backend/services/claimProcessingService.js`
+- `backend/services/paymentService.js`
+  - Stub mode when payment keys are not configured
+  - Live mode when payment keys are provided
+- Integrated in claim/policy flows via backend services and routes
 
 4) Database Documentation (MongoDB + Mongoose Models)
 
 - `backend/models/DeliveryPartner.js`
   - identity/contact fields, city + coordinates, platform list, risk category, policy linkage
 - `backend/models/InsurancePolicy.js`
-  - plan tier, premium, max/remaining coverage, active window, status, loss-ratio metadata, exclusions
+  - plan tier, premium, max/remaining coverage, active window, status, pricing metadata, exclusions
 - `backend/models/InsuranceClaim.js`
-  - associated partner/policy/event, claim status, requested/approved payout, fraud metadata, payout reference
+  - associated partner/policy/event, claim status, payout and fraud metadata
 - `backend/models/DisruptionEvent.js`
-  - disruption type, geo impact zone, measurements, exclusion tag, aggregate payout tracking
+  - disruption type, geo impact zone, measurements, exclusions, aggregate payout tracking
 
 Database config:
 - `backend/config/databaseConfig.js`
@@ -100,29 +90,37 @@ Delivery Partner:
 
 Insurance Policy:
 - `POST /api/insurance-policies/subscribe`
-- `GET /api/insurance-policies/metadata/pricing-model`
+- `GET /api/insurance-policies/partner/:partnerId`
 - `GET /api/insurance-policies/:policyId`
+- `PATCH /api/insurance-policies/:policyId/cancel`
 
 Insurance Claim:
 - `POST /api/insurance-claims/submit`
+- `GET /api/insurance-claims/partner/:partnerId`
 - `GET /api/insurance-claims/:claimId`
+- `GET /api/insurance-claims/flagged`
+- `PATCH /api/insurance-claims/:claimId/review`
+
+Disruption Events:
+- `POST /api/disruption-events`
+- `GET /api/disruption-events`
+- `POST /api/disruption-events/check-threshold`
+- `POST /api/disruption-events/:eventId/trigger-claims`
 
 Health:
 - `GET /api/health`
 
 6) Quality and CI/CD
 
-Backend tests:
+Backend checks:
 - `cd backend && npm test`
-- Includes existing service tests + new auth/validation/retry tests
 
-Frontend tests:
-- `cd frontend && npm run test`
+Frontend checks:
+- `cd frontend && npm run build`
 
-CI workflow:
-- `.github/workflows/ci.yml`
-  - backend install + tests
-  - frontend install + tests + build
+CI workflow (`.github/workflows/ci.yml`):
+- backend: `npm ci` + `npm test`
+- frontend: `npm ci` + `npm run build`
 
 7) Deployment + Secrets Checklist
 
@@ -133,7 +131,6 @@ Required env vars:
 - `ENFORCE_AUTH`
 - `AUTH_DEMO_USERNAME`
 - `AUTH_DEMO_PASSWORD_HASH` (preferred) / `AUTH_DEMO_PASSWORD`
-- `PAYOUT_MODE`
 - `WEATHER_API_KEY`
 - `POLLUTION_API_KEY`
 
