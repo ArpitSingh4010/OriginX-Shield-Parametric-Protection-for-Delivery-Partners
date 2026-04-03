@@ -197,8 +197,8 @@ async function performComprehensiveFraudVerification(claimVerificationInputData)
     networkSignalCoordinates,
     minutesActiveOnDeliveryPlatform,
     numberOfClaimsFiledThisWeek,
-    claimId = 'unknown',
-    deliveryPartnerId = 'unknown',
+    claimId,
+    deliveryPartnerId,
     disruptionEpicentreCoordinates = {},
     disruptionDurationInMinutes = 60,
   } = claimVerificationInputData;

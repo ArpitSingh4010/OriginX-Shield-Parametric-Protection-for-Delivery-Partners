@@ -21,6 +21,12 @@ const {
 } = require('../validators/requestValidators');
 
 const deliveryPartnerRouter = express.Router();
+const ALLOWED_LOCATION_RISK_CATEGORIES = new Set([
+  'low_risk_zone',
+  'moderate_risk_zone',
+  'high_risk_zone',
+  'very_high_risk_zone',
+]);
 
 // ─── POST /api/delivery-partners/register ────────────────────────────────────
 
@@ -72,13 +78,23 @@ deliveryPartnerRouter.post(
       });
     }
 
-    const resolvedRiskAssessment = locationRiskCategory
-      ? {
-        source: 'request_override',
-        assignedRiskCategory: String(locationRiskCategory).toLowerCase(),
-        computedRiskScore: null,
+    let resolvedRiskAssessment;
+    if (locationRiskCategory !== undefined && locationRiskCategory !== null) {
+      const requestedRiskCategory = String(locationRiskCategory).toLowerCase();
+      if (!ALLOWED_LOCATION_RISK_CATEGORIES.has(requestedRiskCategory)) {
+        return response.status(400).json({
+          success: false,
+          message: 'Invalid locationRiskCategory. Must be one of: low_risk_zone, moderate_risk_zone, high_risk_zone, very_high_risk_zone.',
+        });
       }
-      : await assessCityRiskWithAi(primaryDeliveryCity);
+      resolvedRiskAssessment = {
+        source: 'request_override',
+        assignedRiskCategory: requestedRiskCategory,
+        computedRiskScore: null,
+      };
+    } else {
+      resolvedRiskAssessment = await assessCityRiskWithAi(primaryDeliveryCity);
+    }
 
     const newDeliveryPartner = new DeliveryPartner({
       fullName,

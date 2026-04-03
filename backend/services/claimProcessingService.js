@@ -36,6 +36,7 @@ const EXCLUSION_TAG_LABELS = {
   war_or_hostilities: 'war or hostile operations',
   pandemic_or_epidemic: 'pandemic or epidemic events',
 };
+const DEFAULT_DISRUPTION_DURATION_IN_MINUTES = 120;
 
 function resolveSeverityInputsForDisruptionEvent(disruptionType, currentEnvironmentalConditions) {
   const values = {
@@ -342,6 +343,24 @@ async function processIncomingInsuranceClaim(incomingClaimRequestData) {
     );
   }
 
+  const disruptionStartTimestamp = triggeringDisruptionEvent.disruptionStartTimestamp
+    ? new Date(triggeringDisruptionEvent.disruptionStartTimestamp)
+    : null;
+  const disruptionEndTimestamp = triggeringDisruptionEvent.disruptionEndTimestamp
+    ? new Date(triggeringDisruptionEvent.disruptionEndTimestamp)
+    : null;
+  const hasBothTimestamps =
+    disruptionStartTimestamp instanceof Date
+    && !Number.isNaN(disruptionStartTimestamp.getTime())
+    && disruptionEndTimestamp instanceof Date
+    && !Number.isNaN(disruptionEndTimestamp.getTime());
+  const resolvedDisruptionDurationInMinutes = hasBothTimestamps
+    ? Math.max(
+      1,
+      Math.round((disruptionEndTimestamp.getTime() - disruptionStartTimestamp.getTime()) / 60000)
+    )
+    : DEFAULT_DISRUPTION_DURATION_IN_MINUTES;
+
   // Step 5 — Create claim record.
   const pendingClaim = await createPendingInsuranceClaim({
     deliveryPartnerId,
@@ -362,15 +381,7 @@ async function processIncomingInsuranceClaim(incomingClaimRequestData) {
     minutesActiveOnDeliveryPlatform,
     numberOfClaimsFiledThisWeek: activeInsurancePolicy.totalClaimsFiledThisWeek,
     disruptionEpicentreCoordinates: triggeringDisruptionEvent.affectedZoneCentreCoordinates,
-    disruptionDurationInMinutes: Math.max(
-      1,
-      Math.round(
-        (
-          Number(triggeringDisruptionEvent.disruptionEndTimestamp || new Date())
-          - Number(triggeringDisruptionEvent.disruptionStartTimestamp || new Date())
-        ) / 60000
-      )
-    ),
+    disruptionDurationInMinutes: resolvedDisruptionDurationInMinutes,
   });
 
   if (fraudAssessmentResult.requiresManualReview) {

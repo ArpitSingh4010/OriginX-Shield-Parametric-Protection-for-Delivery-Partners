@@ -46,9 +46,8 @@ function resolveFallbackRiskCategory(cityName = '') {
 async function assessCityRiskWithAi(cityName) {
   try {
     const aiResponse = await postJsonWithTimeout('/quick-risk-assess', { cityName });
-    const assignedRiskCategory = String(
-      aiResponse.assignedRiskCategory || 'moderate_risk_zone'
-    ).toLowerCase();
+    const assignedRiskCategory = (aiResponse.assignedRiskCategory || 'moderate_risk_zone')
+      .toLowerCase();
 
     return {
       source: 'ai',
