@@ -54,6 +54,14 @@ expressApplication.post('/api/admin/trigger-weather-check', async (req, res) => 
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 
+expressApplication.get('/', (request, response) => {
+  response.status(200).json({
+    status: 'ok',
+    serviceName: 'GigShield Parametric Insurance API',
+    message: 'Backend is running. Use /api/health for detailed health status.',
+  });
+});
+
 expressApplication.get('/api/health', (request, response) => {
   response.status(200).json({
     status:          'healthy',
