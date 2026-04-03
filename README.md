@@ -22,7 +22,7 @@ Unlike traditional parametric insurance systems that rely solely on environmenta
 
 To detect **actual income disruption** and trigger payouts.
 
-The system is built as an **event-driven insurance architecture**, where Guidewire acts as the system of record, while microservices handle real-time event ingestion and risk computation
+The system is built as an **event-driven insurance architecture**, inspired by Guidewire-style insurance architecture, where policy, claims, and billing flows are modeled in a modular, event-driven system, while microservices handle real-time event ingestion and risk computation
 
 ## Problem
 Delivery partners rely on consistent daily activity for income. External disruptions such as:
@@ -73,13 +73,6 @@ How It Works:
   
    2. manual review
 
-### Target Persona Income Bands
-
-| Persona Segment | Monthly Earnings (INR) | Typical Daily Earnings (INR) | Risk Context |
-|---|---:|---:|---|
-| Entry-level | 15,000 - 22,000 | 700 | Limited buffer against missed work days |
-| Mid-tier | 22,000 - 32,000 | 1,000 | Moderate stability with periodic disruption risk |
-| High-activity | 32,000 - 45,000 | 1,400 | Higher income-at-risk during disruption windows |
 
 ### Target Persona Income Bands
 
