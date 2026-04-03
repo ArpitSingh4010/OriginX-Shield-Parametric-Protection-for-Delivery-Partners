@@ -32,6 +32,14 @@ from anomaly_detector import (
 app = Flask(__name__)
 CORS(app)   # Allow requests from the React frontend / Node.js backend.
 
+AI_SERVICE_PORT = int(os.environ.get('AI_SERVICE_PORT', '5001'))
+AI_SERVICE_HOST = os.environ.get('AI_SERVICE_HOST', '0.0.0.0')
+AI_SERVICE_DEBUG = os.environ.get('AI_SERVICE_DEBUG', 'true').lower() == 'true'
+AI_SERVICE_PUBLIC_BASE_URL = os.environ.get(
+    'AI_SERVICE_PUBLIC_BASE_URL',
+    f'http://localhost:{AI_SERVICE_PORT}'
+)
+
 
 # ─── Health ──────────────────────────────────────────────────────────────────
 
@@ -40,7 +48,7 @@ def health():
     return jsonify({
         'status': 'healthy',
         'service': 'GigShield AI Server',
-        'port': 5001,
+        'port': AI_SERVICE_PORT,
     })
 
 
@@ -273,5 +281,5 @@ def quick_risk_assess():
 # ─── Entry Point ─────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
-    print('GigShield AI Server starting on http://localhost:5001')
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    print(f'GigShield AI Server starting on {AI_SERVICE_PUBLIC_BASE_URL}')
+    app.run(host=AI_SERVICE_HOST, port=AI_SERVICE_PORT, debug=AI_SERVICE_DEBUG)

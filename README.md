@@ -81,6 +81,14 @@ How It Works:
 | Mid-tier | 22,000 - 32,000 | 1,000 | Moderate stability with periodic disruption risk |
 | High-activity | 32,000 - 45,000 | 1,400 | Higher income-at-risk during disruption windows |
 
+### Target Persona Income Bands
+
+| Persona Segment | Monthly Earnings (INR) | Typical Daily Earnings (INR) | Risk Context |
+|---|---:|---:|---|
+| Entry-level | 15,000 - 22,000 | 700 | Limited buffer against missed work days |
+| Mid-tier | 22,000 - 32,000 | 1,000 | Moderate stability with periodic disruption risk |
+| High-activity | 32,000 - 45,000 | 1,400 | Higher income-at-risk during disruption windows |
+
 ## Hackathon Showcase Checklist
 
 ### 1) Registration Process

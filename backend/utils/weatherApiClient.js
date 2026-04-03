@@ -8,7 +8,7 @@
 
 const https = require('https');
 
-const WEATHER_API_BASE_URL = process.env.WEATHER_API_BASE_URL || 'https://api.openweathermap.org/data/2.5';
+const WEATHER_API_BASE_URL = process.env.WEATHER_API_BASE_URL || '';
 const WEATHER_API_KEY = process.env.WEATHER_API_KEY || '';
 
 /**
@@ -55,6 +55,13 @@ function fetchJsonFromUrl(requestUrl) {
  * }>} Normalised weather conditions object.
  */
 async function fetchCurrentWeatherConditionsForCity(cityName) {
+  if (!WEATHER_API_BASE_URL) {
+    throw new Error(
+      'WEATHER_API_BASE_URL environment variable is not set. ' +
+        'Cannot fetch live weather data.'
+    );
+  }
+
   if (!WEATHER_API_KEY) {
     throw new Error(
       'WEATHER_API_KEY environment variable is not set. ' +

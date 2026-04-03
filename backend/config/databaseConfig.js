@@ -6,8 +6,7 @@
 
 const mongoose = require('mongoose');
 
-const MONGODB_CONNECTION_URI =
-  process.env.MONGODB_URI || 'mongodb://localhost:27017/gigshield';
+const MONGODB_CONNECTION_URI = process.env.MONGODB_URI;
 
 const MONGOOSE_CONNECTION_OPTIONS = {
   useNewUrlParser: true,
@@ -22,6 +21,10 @@ const MONGOOSE_CONNECTION_OPTIONS = {
  */
 async function connectToDatabase() {
   try {
+    if (!MONGODB_CONNECTION_URI) {
+      throw new Error('MONGODB_URI environment variable is not configured.');
+    }
+
     await mongoose.connect(MONGODB_CONNECTION_URI, MONGOOSE_CONNECTION_OPTIONS);
     console.log('Successfully connected to MongoDB database');
   } catch (databaseConnectionError) {

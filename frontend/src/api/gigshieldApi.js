@@ -3,8 +3,8 @@
  * Wraps all fetch calls to the Node.js backend (/api) and Python AI server (/ai).
  */
 
-const BASE = '/api';
-const AI   = '/ai';
+const BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+const AI   = import.meta.env.VITE_AI_BASE_URL  || '/ai';
 
 async function request(url, options = {}) {
   const res = await fetch(url, {

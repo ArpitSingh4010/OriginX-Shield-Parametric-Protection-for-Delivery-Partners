@@ -8,8 +8,7 @@
 
 const https = require('https');
 
-const POLLUTION_API_BASE_URL =
-  process.env.POLLUTION_API_BASE_URL || 'https://api.openweathermap.org/data/2.5';
+const POLLUTION_API_BASE_URL = process.env.POLLUTION_API_BASE_URL || '';
 const POLLUTION_API_KEY = process.env.POLLUTION_API_KEY || process.env.WEATHER_API_KEY || '';
 
 /**
@@ -60,6 +59,13 @@ async function fetchCurrentAirQualityIndexForLocation(
   latitudeOfLocation,
   longitudeOfLocation
 ) {
+  if (!POLLUTION_API_BASE_URL) {
+    throw new Error(
+      'POLLUTION_API_BASE_URL environment variable is not set. ' +
+        'Cannot fetch live air quality data.'
+    );
+  }
+
   if (!POLLUTION_API_KEY) {
     throw new Error(
       'POLLUTION_API_KEY environment variable is not set. ' +
