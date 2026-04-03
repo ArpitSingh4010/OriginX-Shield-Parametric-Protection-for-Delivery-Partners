@@ -13,9 +13,12 @@ AI-powered parametric insurance for food delivery workers.
 Kavach is a **Guidewire-aligned, IRDAI-compliant micro-insurance platform** designed for gig workers, enabling automatic compensation when external disruptions materially impact their earning ability.
 
 Unlike traditional parametric insurance systems that rely solely on environmental triggers, Kavach combines:
-. Environmental signals (weather, AQI)
-. Platform activity (delivery engagement)
-. Behavioral patterns
+
+- Environmental signals (weather, AQI)
+
+- Platform activity (delivery engagement)
+
+- Behavioral patterns
 
 To detect **actual income disruption** and trigger payouts.
 
@@ -24,19 +27,25 @@ The system is built as an **event-driven insurance architecture**, where Guidewi
 ## Problem
 Delivery partners rely on consistent daily activity for income. External disruptions such as:
 
-. Heavy rainfall and flooding
-. Extreme heat
-. Hazardous air quality
-. Fuel shortages and curfews
+- Heavy rainfall and flooding
 
-Directly reduce their earning potential.
+- Extreme heat
+
+- Hazardous air quality
+
+- Fuel shortages and curfews
+
+This directly reduces their earning potential.
 
 Traditional insurance fails because it:
 
-. Does not cover short-term income loss
-. Requires manual claims
-. Has slow settlement cycles
-. Cannot verify real income disruption
+- Does not cover short-term income loss
+
+- Requires manual claims
+
+- Has slow settlement cycles
+
+- Cannot verify real income disruption
 
 ## Solution
 
@@ -44,15 +53,24 @@ Kavach introduces a micro-duration (weekly) income protection system.
 
 How It Works:
 
-. User subscribes to a weekly policy
-. System continuously monitors disruption signals
-. Multi-factor engine evaluates:
-   1.weather conditions
-   2.platform activity
-   3.user engagement
-. Claims are triggered automatically
-. Claim confidence scoring determines:
+- User subscribes to a weekly policy
+  
+- System continuously monitors disruption signals
+  
+- Multi-factor engine evaluates:
+  
+   1. weather conditions
+  
+   2. platform activity
+  
+   3. user engagement
+  
+- Claims are triggered automatically
+  
+- Claim confidence scoring determines:
+  
    1. instant payout
+  
    2. manual review
 
 ### Target Persona Income Bands
