@@ -23,6 +23,14 @@ GigShield is a zero-touch parametric insurance system:
 - runs fraud checks
 - auto-approves low-risk claims, routes risky claims to admin review
 
+### Target Persona Income Bands
+
+| Persona Segment | Monthly Earnings (INR) | Typical Daily Earnings (INR) | Risk Context |
+|---|---:|---:|---|
+| Entry-level | 15,000 - 22,000 | 700 | Limited buffer against missed work days |
+| Mid-tier | 22,000 - 32,000 | 1,000 | Moderate stability with periodic disruption risk |
+| High-activity | 32,000 - 45,000 | 1,400 | Higher income-at-risk during disruption windows |
+
 ## Hackathon Showcase Checklist
 
 ### 1) Registration Process
@@ -49,6 +57,14 @@ Implemented in `backend/services/weeklyPremiumCalculator.js` using:
 - loss-ratio guardrails
 
 Subscription API returns transparent `pricingJustification`.
+
+Example plans:
+
+| Plan | Weekly Premium (INR) | Coverage (INR) |
+|---|---:|---:|
+| Basic | 25 | 300 |
+| Standard | 40 | 500 |
+| Premium | 60 | 700 |
 
 #### Insurance Calculation Maths
 
@@ -115,6 +131,15 @@ Supported triggers:
 - lpg_shortage
 - flooding (mock/event-driven)
 - area_curfew (mock/event-driven)
+
+Trigger threshold snapshot:
+
+| Event | Trigger |
+|---|---|
+| Heavy Rain | Rainfall > 50 mm |
+| Extreme Heat | Temperature > 42°C |
+| Hazardous Air Quality | AQI > 300 |
+| LPG Shortage | Severity Index > 70 |
 
 Trigger APIs:
 
