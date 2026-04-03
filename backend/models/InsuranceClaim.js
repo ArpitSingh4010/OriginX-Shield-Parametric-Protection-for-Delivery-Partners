@@ -7,7 +7,10 @@
  */
 
 const mongoose = require('mongoose');
-const { INSURANCE_CLAIM_STATUSES } = require('../config/parametricInsuranceConstants');
+const {
+  INSURANCE_CLAIM_STATUSES,
+  DISRUPTION_EVENT_TYPES,
+} = require('../config/parametricInsuranceConstants');
 
 const insuranceClaimSchema = new mongoose.Schema(
   {
@@ -27,6 +30,12 @@ const insuranceClaimSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'DisruptionEvent',
       required: [true, 'Triggering disruption event ID is required'],
+    },
+
+    claimReasonCategory: {
+      type: String,
+      enum: Object.values(DISRUPTION_EVENT_TYPES),
+      default: null,
     },
 
     claimSubmissionTimestamp: {

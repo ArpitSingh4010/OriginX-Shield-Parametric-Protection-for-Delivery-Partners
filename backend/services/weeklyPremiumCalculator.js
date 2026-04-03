@@ -14,6 +14,7 @@ const {
   DELIVERY_PARTNER_PERSONA_EARNINGS_BANDS,
   PREMIUM_MODEL_ASSUMPTIONS,
   LOSS_RATIO_GUARDRAILS,
+  SEASONAL_RISK_PREMIUM_MULTIPLIERS,
 } = require('../config/parametricInsuranceConstants');
 
 /**
@@ -130,6 +131,31 @@ function identifyPersonaEarningsBand(monthlyEarningsInRupees) {
   return DELIVERY_PARTNER_PERSONA_EARNINGS_BANDS.MID_TIER;
 }
 
+function resolveSeasonalRiskMultiplier(calculationDate = new Date()) {
+  const month = calculationDate.getUTCMonth() + 1;
+
+  // Monsoon risk window (India-focused): Jun-Sep.
+  if (month >= 6 && month <= 9) {
+    return {
+      seasonalRiskPeriod: 'monsoon',
+      seasonalRiskMultiplier: SEASONAL_RISK_PREMIUM_MULTIPLIERS.MONSOON,
+    };
+  }
+
+  // Peak heat window: Apr-May.
+  if (month >= 4 && month <= 5) {
+    return {
+      seasonalRiskPeriod: 'summer_heat',
+      seasonalRiskMultiplier: SEASONAL_RISK_PREMIUM_MULTIPLIERS.SUMMER_HEAT,
+    };
+  }
+
+  return {
+    seasonalRiskPeriod: 'default',
+    seasonalRiskMultiplier: SEASONAL_RISK_PREMIUM_MULTIPLIERS.DEFAULT,
+  };
+}
+
 function calculateProjectedLossRatio({
   weeklyPremiumInRupees,
   weeklyCoverageInRupees,
@@ -148,11 +174,14 @@ function calculateContextualWeeklyPremium({
   locationRiskCategory,
   deliveryPlatformNames,
   averageMonthlyEarningsInRupees,
+  calculationDate,
 }) {
   const planConfiguration = getInsurancePlanConfiguration(selectedPlanTier);
   const locationRiskMultiplier = getRiskMultiplierForLocationCategory(locationRiskCategory);
   const platformRiskMultiplier = getPlatformRiskMultiplier(deliveryPlatformNames);
   const earningsBand = identifyPersonaEarningsBand(averageMonthlyEarningsInRupees);
+  const { seasonalRiskPeriod, seasonalRiskMultiplier } =
+    resolveSeasonalRiskMultiplier(calculationDate);
 
   const weeklyEarningsEstimateInRupees = Math.round(
     (earningsBand.averageDailyEarningsInRupees * PREMIUM_MODEL_ASSUMPTIONS.WORKING_DAYS_PER_WEEK)
@@ -164,7 +193,8 @@ function calculateContextualWeeklyPremium({
 
   const basePremiumBeforeLoadings = planConfiguration.weeklyPremiumInRupees
     * locationRiskMultiplier
-    * platformRiskMultiplier;
+    * platformRiskMultiplier
+    * seasonalRiskMultiplier;
   const adjustedWeeklyPremiumInRupees = Math.round(
     basePremiumBeforeLoadings * (1 + PREMIUM_MODEL_ASSUMPTIONS.LOSS_RATIO_LOADING_FACTOR)
   );
@@ -188,6 +218,8 @@ function calculateContextualWeeklyPremium({
       suggestedCoverageFromEarningsInRupees,
       locationRiskMultiplier: Number(locationRiskMultiplier.toFixed(2)),
       platformRiskMultiplier: Number(platformRiskMultiplier.toFixed(2)),
+      seasonalRiskPeriod,
+      seasonalRiskMultiplier: Number(seasonalRiskMultiplier.toFixed(2)),
       targetLossRatio: LOSS_RATIO_GUARDRAILS.TARGET_LOSS_RATIO,
       projectedLossRatio,
       lossRatioAssessment,
@@ -224,4 +256,5 @@ module.exports = {
   getRiskMultiplierForLocationCategory,
   getPlatformRiskMultiplier,
   identifyPersonaEarningsBand,
+  resolveSeasonalRiskMultiplier,
 };

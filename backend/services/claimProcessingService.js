@@ -23,6 +23,7 @@ const {
   INSURANCE_POLICY_STATUSES,
   DISRUPTION_EVENT_TYPES,
   DISRUPTION_TRIGGER_THRESHOLDS,
+  RISK_CONTROL_LIMITS,
 } = require('../config/parametricInsuranceConstants');
 const { performComprehensiveFraudVerification } = require('./fraudDetectionService');
 const {
@@ -182,6 +183,15 @@ async function approveClaimAndDeductFromPolicyCoverage(
   }
 
   await activeInsurancePolicy.save();
+
+  const disruptionEvent = await DisruptionEvent.findById(insuranceClaim.triggeringDisruptionEventId);
+  if (disruptionEvent) {
+    disruptionEvent.totalCompensationDispersedInRupees =
+      Number(disruptionEvent.totalCompensationDispersedInRupees || 0)
+      + approvedPayoutAmountInRupees;
+    await disruptionEvent.save();
+  }
+
   return insuranceClaim;
 }
 
@@ -276,11 +286,68 @@ async function processIncomingInsuranceClaim(incomingClaimRequestData) {
     activeInsurancePolicy.remainingCoverageInRupees
   );
 
+  if (requestedCompensationAmountInRupees <= 0) {
+    throw new Error(
+      'Claim cannot be processed — measured disruption severity does not qualify for payout.'
+    );
+  }
+
+  // Step 4b — Circuit breaker checks (event-level and city daily-level caps).
+  const eventPayoutToDate = Number(triggeringDisruptionEvent.totalCompensationDispersedInRupees || 0);
+  if (
+    eventPayoutToDate + requestedCompensationAmountInRupees
+    > RISK_CONTROL_LIMITS.MAXIMUM_EVENT_TOTAL_PAYOUT_IN_RUPEES
+  ) {
+    throw new Error(
+      'Claim cannot be processed — event payout cap reached. Please retry after manual admin review.'
+    );
+  }
+
+  const eventStart = new Date(triggeringDisruptionEvent.disruptionStartTimestamp || new Date());
+  const startOfDayUtc = new Date(Date.UTC(
+    eventStart.getUTCFullYear(),
+    eventStart.getUTCMonth(),
+    eventStart.getUTCDate(),
+    0, 0, 0, 0
+  ));
+  const endOfDayUtc = new Date(Date.UTC(
+    eventStart.getUTCFullYear(),
+    eventStart.getUTCMonth(),
+    eventStart.getUTCDate(),
+    23, 59, 59, 999
+  ));
+
+  const todayCityPayoutAggregate = await DisruptionEvent.aggregate([
+    {
+      $match: {
+        affectedCityName: triggeringDisruptionEvent.affectedCityName,
+        disruptionStartTimestamp: { $gte: startOfDayUtc, $lte: endOfDayUtc },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: '$totalCompensationDispersedInRupees' },
+      },
+    },
+  ]);
+
+  const cityPayoutToDate = Number(todayCityPayoutAggregate?.[0]?.total || 0);
+  if (
+    cityPayoutToDate + requestedCompensationAmountInRupees
+    > RISK_CONTROL_LIMITS.MAXIMUM_CITY_DAILY_PAYOUT_IN_RUPEES
+  ) {
+    throw new Error(
+      'Claim cannot be processed — city daily payout circuit breaker is active.'
+    );
+  }
+
   // Step 5 — Create claim record.
   const pendingClaim = await createPendingInsuranceClaim({
     deliveryPartnerId,
     associatedPolicyId: activeInsurancePolicy._id,
     triggeringDisruptionEventId,
+    claimReasonCategory: triggeringDisruptionEvent.disruptionType,
     requestedCompensationAmountInRupees,
     partnerLocationAtDisruptionTime,
     wasPartnerActiveOnDeliveryPlatform: minutesActiveOnDeliveryPlatform >= 30,

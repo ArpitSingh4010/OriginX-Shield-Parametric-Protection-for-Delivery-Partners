@@ -99,6 +99,26 @@ const PREMIUM_MODEL_ASSUMPTIONS = {
   DEFAULT_EXPECTED_DISRUPTION_DAYS_PER_MONTH: 3,
   EXPECTED_PAYOUT_SEVERITY_RATIO: 0.3,
   LOSS_RATIO_LOADING_FACTOR: 0.1,
+  MINIMUM_DISRUPTION_PAYOUT_RATIO: 0.4,
+  MAXIMUM_DISRUPTION_PAYOUT_RATIO: 0.6,
+};
+
+/**
+ * Seasonal multipliers to reflect higher disruption risk windows
+ * while keeping pricing model simple for hackathon demonstration.
+ */
+const SEASONAL_RISK_PREMIUM_MULTIPLIERS = {
+  DEFAULT: 1.0,
+  SUMMER_HEAT: 1.1,
+  MONSOON: 1.15,
+};
+
+/**
+ * Baseline risk controls for financial sustainability.
+ */
+const RISK_CONTROL_LIMITS = {
+  MAXIMUM_EVENT_TOTAL_PAYOUT_IN_RUPEES: 300000,
+  MAXIMUM_CITY_DAILY_PAYOUT_IN_RUPEES: 500000,
 };
 
 /**
@@ -167,4 +187,6 @@ module.exports = {
   INSURANCE_POLICY_STATUSES,
   DISRUPTION_EVENT_TYPES,
   FRAUD_DETECTION_THRESHOLDS,
+  SEASONAL_RISK_PREMIUM_MULTIPLIERS,
+  RISK_CONTROL_LIMITS,
 };
