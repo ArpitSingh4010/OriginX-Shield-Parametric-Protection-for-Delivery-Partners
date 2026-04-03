@@ -172,6 +172,51 @@ Premium checkout is intentionally disabled by default.
 - users can subscribe directly via `/subscribe` and access coverage immediately
 - Razorpay endpoints remain available for future enablement
 
+## Guidewire-Centric System Design
+
+Kavach leverages Guidewire as a coordinated insurance execution engine:
+
+### PolicyCenter
+
+- Dynamic underwriting using behavioral + environmental risk inputs
+- Weekly policy issuance with configurable product definitions
+- Rule-based eligibility validation
+
+### ClaimCenter
+
+- Event-driven FNOL (First Notice of Loss)
+- Automated claim triage via confidence scoring
+- SLA-based claim lifecycle enforcement
+- Fraud flags routed to manual adjuster queues
+
+### BillingCenter
+
+- Subscription-based billing (weekly cycles)
+- Payment retries and policy suspension logic
+- Integration with Razorpay for reconciliation
+
+### Data Flow
+
+1. User registers → KYC validation
+2. Policy created → PolicyCenter
+3. Premium calculated → rating engine
+4. Payment processed → BillingCenter
+5. Event detected → ClaimCenter FNOL
+6. Fraud scoring → ML service
+7. Payout executed → payment gateway
+
+### IRDAI Compliance Enforcement
+
+Kavach enforces compliance at the system level, ensuring auditability and regulatory alignment.
+
+| Regulation Area | System Enforcement | Implementation |
+|---|---|---|
+| KYC / AML | Mandatory verification before policy issuance | Aadhaar/PAN API + pre-bind validation |
+| Claim Settlement | Automated SLA timers and escalation workflows | ClaimCenter lifecycle rules |
+| Auditability | Traceable logs for every claim decision | Event logs + audit trails |
+| Pricing Governance | Actuarial justification for premiums | Rating engine with loss ratio tracking |
+| Data Privacy | Secure storage and access control | Encryption + role-based access |
+
 ## Tech Stack
 
 - Frontend: React + Vite
