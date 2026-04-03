@@ -14,6 +14,7 @@ const {
   getPlatformRiskMultiplier,
   getRiskMultiplierForLocationCategory,
   identifyPersonaEarningsBand,
+  resolveSeasonalRiskMultiplier,
 } = require('../services/weeklyPremiumCalculator');
 
 describe('getInsurancePlanConfiguration', () => {
@@ -153,11 +154,33 @@ describe('calculateContextualWeeklyPremium', () => {
     expect(calculationResult.maximumCoverageInRupees).toBe(500);
     expect(calculationResult.pricingJustification.weeklyEarningsEstimateInRupees).toBe(6000);
     expect(calculationResult.pricingJustification.platformRiskMultiplier).toBe(1.05);
+    expect(calculationResult.pricingJustification.seasonalRiskPeriod).toBeDefined();
+    expect(calculationResult.pricingJustification.seasonalRiskMultiplier).toBeGreaterThan(0);
     expect([
       'above_sustainable_band',
       'within_sustainable_band',
       'below_sustainable_band',
     ]).toContain(calculationResult.pricingJustification.lossRatioAssessment);
+  });
+});
+
+describe('resolveSeasonalRiskMultiplier', () => {
+  test('returns monsoon multiplier for July', () => {
+    const result = resolveSeasonalRiskMultiplier(new Date('2026-07-10T00:00:00.000Z'));
+    expect(result.seasonalRiskPeriod).toBe('monsoon');
+    expect(result.seasonalRiskMultiplier).toBe(1.15);
+  });
+
+  test('returns summer heat multiplier for April', () => {
+    const result = resolveSeasonalRiskMultiplier(new Date('2026-04-10T00:00:00.000Z'));
+    expect(result.seasonalRiskPeriod).toBe('summer_heat');
+    expect(result.seasonalRiskMultiplier).toBe(1.1);
+  });
+
+  test('returns default multiplier for December', () => {
+    const result = resolveSeasonalRiskMultiplier(new Date('2026-12-10T00:00:00.000Z'));
+    expect(result.seasonalRiskPeriod).toBe('default');
+    expect(result.seasonalRiskMultiplier).toBe(1);
   });
 });
 

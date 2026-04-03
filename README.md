@@ -23,6 +23,17 @@ GigShield is a zero-touch parametric insurance system:
 - runs fraud checks
 - auto-approves low-risk claims, routes risky claims to admin review
 
+### Model Summary (Implementation-Aligned)
+
+GigShield is implemented as a parametric micro-insurance system that combines:
+
+- objective environmental trigger detection (rainfall, heat, AQI, LPG shortage)
+- actuarial premium adjustment (plan + location + platform + seasonality + loss-ratio checks)
+- fraud-aware claim processing with automatic/manual routing
+- payout sustainability controls (event cap + city-level daily circuit breaker)
+
+This keeps the system transparent and hackathon-friendly while still reflecting practical risk controls.
+
 ## Hackathon Showcase Checklist
 
 ### 1) Registration Process
@@ -44,6 +55,7 @@ Implemented in `backend/services/weeklyPremiumCalculator.js` using:
 
 - location risk multiplier
 - platform multiplier
+- seasonality multiplier (monsoon and summer heat windows)
 - earnings-band context
 - loss-ratio guardrails
 
@@ -86,6 +98,9 @@ Trigger APIs:
 - automatic fraud scoring
 - instant auto-approval path for low-risk claims
 - manual review fallback for suspicious claims
+- payout circuit breaker checks before approval:
+  - max total payout per event
+  - max total city payout per day
 
 ## Admin Mode (Hackathon)
 
@@ -111,6 +126,48 @@ Premium checkout is intentionally disabled by default.
 - `ENABLE_PREMIUM_PAYMENT_FLOW=false`
 - users can subscribe directly via `/subscribe` and access coverage immediately
 - Razorpay endpoints remain available for future enablement
+- payout execution defaults to mock/stub-safe mode unless live credentials are provided
+
+## End-to-End Claim Processing Logic
+
+1. Trigger condition detected (weather/manual event)
+2. Claim initiated through API or event-trigger endpoint
+3. Exclusion and severity checks run
+4. Fraud verification runs (location/activity/claim-frequency)
+5. Risk control checks run (event cap + city daily cap)
+6. If valid, payout is processed (or kept approved-for-payout if payout gateway fails)
+7. If suspicious, claim is flagged for manual admin review
+
+## Essential Trigger Thresholds
+
+- Heavy Rain: rainfall > 50 mm
+- Extreme Heat: temperature > 42°C
+- High Pollution: AQI > 300
+- LPG Shortage: severity index > 70
+
+## Hosting Handoff (What to Tell Your Friend)
+
+To host the project completely, run and deploy these 3 services:
+
+1. **Backend (Node/Express, port 5000)**
+   - Set `MONGODB_URI`, `JWT_SECRET_KEY`, and optionally weather/payment keys.
+   - Keep `ENABLE_PREMIUM_PAYMENT_FLOW=false` for demo-safe mode.
+2. **AI Service (Flask, port 5001)**
+   - Install `ai/requirements.txt`.
+   - Expose `/health`, `/assess-risk`, `/detect-anomaly`, `/quick-risk-assess`.
+3. **Frontend (Vite build)**
+   - Set `VITE_API_BASE_URL` to backend URL.
+   - Set `VITE_AI_BASE_URL` to AI service URL.
+   - Optional: set `VITE_ADMIN_ACCESS_KEY` to gate `/admin`.
+
+Production-ready minimum checklist:
+
+- MongoDB reachable from backend runtime
+- Backend + AI CORS allowed for frontend host
+- Environment variables configured in hosting platform
+- Frontend built and served from static hosting/CDN
+- Backend `/api/health` and AI `/health` return healthy status
+- CI checks passing (`backend npm test`, `frontend npm run build`)
 
 ## Tech Stack
 
