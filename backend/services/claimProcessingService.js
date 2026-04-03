@@ -36,6 +36,8 @@ const EXCLUSION_TAG_LABELS = {
   war_or_hostilities: 'war or hostile operations',
   pandemic_or_epidemic: 'pandemic or epidemic events',
 };
+// Conservative fallback window for anomaly checks when event timestamps are incomplete.
+// Keeps AI behavior deterministic instead of deriving near-zero durations from missing values.
 const DEFAULT_DISRUPTION_DURATION_IN_MINUTES = 120;
 
 function resolveSeverityInputsForDisruptionEvent(disruptionType, currentEnvironmentalConditions) {

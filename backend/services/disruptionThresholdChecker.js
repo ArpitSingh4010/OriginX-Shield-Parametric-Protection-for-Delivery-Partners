@@ -155,11 +155,11 @@ function determineCompensationAmountForDisruption(
     Math.min(PREMIUM_MODEL_ASSUMPTIONS.MAXIMUM_DISRUPTION_PAYOUT_RATIO, clampedSeverityRatio)
   );
 
-  const recommendedCompensationInRupees = Math.round(
+  const boundedCompensationInRupees = Math.round(
     boundedPayoutRatio * remainingPolicyCoverageInRupees
   );
 
-  return Math.min(recommendedCompensationInRupees, remainingPolicyCoverageInRupees);
+  return Math.min(boundedCompensationInRupees, remainingPolicyCoverageInRupees);
 }
 
 module.exports = {
