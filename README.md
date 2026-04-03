@@ -76,7 +76,8 @@ Projected loss ratio shown in `pricingJustification` is:
 
 Let:
 - `C` = maximum weekly coverage of selected plan
-- `e` = expected payout severity ratio
+- `e` = expected share of `C` paid out in a qualifying disruption week
+  (severity assumption, not claim probability)
 
 Then:
 
@@ -85,6 +86,10 @@ Then:
 Using the same example with Standard plan coverage:
 - `C = 500`, `e = 0.30`, `Premium = 64`
 - `Projected Loss Ratio = (500 × 0.30) / 64 = 150 / 64 = 2.34` (rounded to 2 decimals)
+
+Note: this worked example is to show the calculation path only. In the current model,
+such a value is classified as `above_sustainable_band` and is surfaced in
+`pricingJustification.lossRatioAssessment`.
 
 AI-assisted risk hint during registration:
 
