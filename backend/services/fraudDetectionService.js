@@ -16,6 +16,7 @@
 const {
   FRAUD_DETECTION_THRESHOLDS,
 } = require('../config/parametricInsuranceConstants');
+const { detectClaimAnomalyWithAi } = require('./aiIntegrationService');
 
 /**
  * Calculates the straight-line distance in kilometres between two
@@ -128,7 +129,7 @@ function hasDeliveryPartnerExceededWeeklyClaimLimit(numberOfClaimsFiledThisWeek)
  * @param {boolean} verificationCheckResults.hasExceededWeeklyClaimLimit
  * @returns {number} Composite fraud risk score in [0, 1].
  */
-function computeCompositeFraudRiskScore(verificationCheckResults) {
+function computeCompositeFraudRiskScore(verificationCheckResults, aiAnomalyRiskScore = null) {
   const {
     isLocationConsistent,
     wasPartnerActiveOnPlatform,
@@ -149,7 +150,14 @@ function computeCompositeFraudRiskScore(verificationCheckResults) {
     accumulatedFraudRiskScore += 0.30;
   }
 
-  return Math.min(accumulatedFraudRiskScore, 1.0);
+  const baseRuleScore = Math.min(accumulatedFraudRiskScore, 1.0);
+
+  if (typeof aiAnomalyRiskScore !== 'number' || Number.isNaN(aiAnomalyRiskScore)) {
+    return baseRuleScore;
+  }
+
+  const normalisedAiRiskScore = Math.max(0, Math.min(1, aiAnomalyRiskScore));
+  return Number((baseRuleScore * 0.7 + normalisedAiRiskScore * 0.3).toFixed(3));
 }
 
 /**
@@ -183,12 +191,16 @@ function shouldClaimBeEscalatedForManualFraudReview(fraudRiskScore) {
  *   verificationDetails: object
  * }}
  */
-function performComprehensiveFraudVerification(claimVerificationInputData) {
+async function performComprehensiveFraudVerification(claimVerificationInputData) {
   const {
     gpsReportedCoordinates,
     networkSignalCoordinates,
     minutesActiveOnDeliveryPlatform,
     numberOfClaimsFiledThisWeek,
+    claimId = 'unknown',
+    deliveryPartnerId = 'unknown',
+    disruptionEpicentreCoordinates = {},
+    disruptionDurationInMinutes = 60,
   } = claimVerificationInputData;
 
   const { isLocationConsistent, discrepancyInKilometres } =
@@ -203,13 +215,29 @@ function performComprehensiveFraudVerification(claimVerificationInputData) {
   const hasExceededWeeklyClaimLimit =
     hasDeliveryPartnerExceededWeeklyClaimLimit(numberOfClaimsFiledThisWeek);
 
+  const aiAnomalyAssessment = await detectClaimAnomalyWithAi({
+    claimId,
+    deliveryPartnerId,
+    numberOfClaimsFiledInLastSevenDays: numberOfClaimsFiledThisWeek,
+    partnerReportedLatitudeAtClaimTime: gpsReportedCoordinates.latitude,
+    partnerReportedLongitudeAtClaimTime: gpsReportedCoordinates.longitude,
+    disruptionEpicentreLatitude:
+      Number(disruptionEpicentreCoordinates.latitude) || gpsReportedCoordinates.latitude,
+    disruptionEpicentreLongitude:
+      Number(disruptionEpicentreCoordinates.longitude) || gpsReportedCoordinates.longitude,
+    minutesActiveOnDeliveryPlatformDuringDisruption: minutesActiveOnDeliveryPlatform,
+    disruptionDurationInMinutes,
+  });
+
   const fraudRiskScore = computeCompositeFraudRiskScore({
     isLocationConsistent,
     wasPartnerActiveOnPlatform,
     hasExceededWeeklyClaimLimit,
-  });
+  }, aiAnomalyAssessment.overallAnomalyRiskScore);
 
-  const requiresManualReview = shouldClaimBeEscalatedForManualFraudReview(fraudRiskScore);
+  const requiresManualReview =
+    shouldClaimBeEscalatedForManualFraudReview(fraudRiskScore)
+    || aiAnomalyAssessment.shouldFlagForManualReview;
 
   return {
     fraudRiskScore,
@@ -219,6 +247,7 @@ function performComprehensiveFraudVerification(claimVerificationInputData) {
       locationDiscrepancyInKilometres: discrepancyInKilometres,
       wasPartnerActiveOnPlatform,
       hasExceededWeeklyClaimLimit,
+      aiAnomalyAssessment,
     },
   };
 }

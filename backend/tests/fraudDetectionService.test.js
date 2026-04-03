@@ -119,8 +119,8 @@ describe('shouldClaimBeEscalatedForManualFraudReview', () => {
 });
 
 describe('performComprehensiveFraudVerification', () => {
-  test('approves a legitimate claim automatically without flagging for review', () => {
-    const fraudAssessmentResult = performComprehensiveFraudVerification({
+  test('approves a legitimate claim automatically without flagging for review', async () => {
+    const fraudAssessmentResult = await performComprehensiveFraudVerification({
       gpsReportedCoordinates: { latitude: 13.0827, longitude: 80.2707 },
       networkSignalCoordinates: { latitude: 13.0828, longitude: 80.2708 },
       minutesActiveOnDeliveryPlatform: 45,
@@ -133,8 +133,8 @@ describe('performComprehensiveFraudVerification', () => {
     expect(fraudAssessmentResult.verificationDetails.wasPartnerActiveOnPlatform).toBe(true);
   });
 
-  test('flags a suspicious claim for manual review when location is inconsistent and partner was inactive', () => {
-    const fraudAssessmentResult = performComprehensiveFraudVerification({
+  test('flags a suspicious claim for manual review when location is inconsistent and partner was inactive', async () => {
+    const fraudAssessmentResult = await performComprehensiveFraudVerification({
       gpsReportedCoordinates: { latitude: 13.0827, longitude: 80.2707 },
       networkSignalCoordinates: { latitude: 12.9716, longitude: 77.5946 },
       minutesActiveOnDeliveryPlatform: 5,

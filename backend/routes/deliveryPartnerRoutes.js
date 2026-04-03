@@ -14,6 +14,7 @@
 const express = require('express');
 const DeliveryPartner = require('../models/DeliveryPartner');
 const { validateIncomingRequest } = require('../middleware/validationMiddleware');
+const { assessCityRiskWithAi } = require('../services/aiIntegrationService');
 const {
   deliveryPartnerRegistrationValidators,
   deliveryPartnerIdParamValidators,
@@ -71,6 +72,14 @@ deliveryPartnerRouter.post(
       });
     }
 
+    const resolvedRiskAssessment = locationRiskCategory
+      ? {
+        source: 'request_override',
+        assignedRiskCategory: String(locationRiskCategory).toLowerCase(),
+        computedRiskScore: null,
+      }
+      : await assessCityRiskWithAi(primaryDeliveryCity);
+
     const newDeliveryPartner = new DeliveryPartner({
       fullName,
       emailAddress,
@@ -79,7 +88,7 @@ deliveryPartnerRouter.post(
       primaryDeliveryZoneCoordinates,
       deliveryPlatformNames,
       averageMonthlyEarningsInRupees: averageMonthlyEarningsInRupees || null,
-      locationRiskCategory: locationRiskCategory || 'moderate_risk_zone',
+      locationRiskCategory: resolvedRiskAssessment.assignedRiskCategory,
     });
 
     const savedDeliveryPartner = await newDeliveryPartner.save();
@@ -94,6 +103,8 @@ deliveryPartnerRouter.post(
         primaryDeliveryCity: savedDeliveryPartner.primaryDeliveryCity,
         deliveryPlatformNames: savedDeliveryPartner.deliveryPlatformNames,
         locationRiskCategory: savedDeliveryPartner.locationRiskCategory,
+        locationRiskAssessmentSource: resolvedRiskAssessment.source,
+        locationRiskScore: resolvedRiskAssessment.computedRiskScore,
         accountRegistrationDate: savedDeliveryPartner.accountRegistrationDate,
       },
     });

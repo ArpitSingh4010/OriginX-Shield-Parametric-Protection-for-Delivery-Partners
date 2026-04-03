@@ -354,11 +354,23 @@ async function processIncomingInsuranceClaim(incomingClaimRequestData) {
   });
 
   // Step 6 — Fraud verification.
-  const fraudAssessmentResult = performComprehensiveFraudVerification({
+  const fraudAssessmentResult = await performComprehensiveFraudVerification({
+    claimId: pendingClaim._id.toString(),
+    deliveryPartnerId,
     gpsReportedCoordinates: partnerLocationAtDisruptionTime,
     networkSignalCoordinates,
     minutesActiveOnDeliveryPlatform,
     numberOfClaimsFiledThisWeek: activeInsurancePolicy.totalClaimsFiledThisWeek,
+    disruptionEpicentreCoordinates: triggeringDisruptionEvent.affectedZoneCentreCoordinates,
+    disruptionDurationInMinutes: Math.max(
+      1,
+      Math.round(
+        (
+          Number(triggeringDisruptionEvent.disruptionEndTimestamp || new Date())
+          - Number(triggeringDisruptionEvent.disruptionStartTimestamp || new Date())
+        ) / 60000
+      )
+    ),
   });
 
   if (fraudAssessmentResult.requiresManualReview) {

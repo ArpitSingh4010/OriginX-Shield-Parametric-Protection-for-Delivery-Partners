@@ -144,14 +144,19 @@ describe('calculateDisruptionSeverityRatio', () => {
 });
 
 describe('determineCompensationAmountForDisruption', () => {
+  test('applies minimum payout floor when severity is below floor but above zero', () => {
+    const compensationAmount = determineCompensationAmountForDisruption(0.1, 500);
+    expect(compensationAmount).toBe(200);
+  });
+
   test('returns correct compensation for given severity and coverage', () => {
     const compensationAmount = determineCompensationAmountForDisruption(0.5, 500);
     expect(compensationAmount).toBe(250);
   });
 
-  test('does not exceed remaining policy coverage', () => {
+  test('caps payout at configured maximum disruption payout ratio', () => {
     const compensationAmount = determineCompensationAmountForDisruption(1.0, 300);
-    expect(compensationAmount).toBe(300);
+    expect(compensationAmount).toBe(180);
   });
 
   test('returns 0 when severity ratio is 0', () => {
