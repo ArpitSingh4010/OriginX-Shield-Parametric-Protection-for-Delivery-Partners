@@ -62,6 +62,34 @@ const deliveryPartnerSchema = new mongoose.Schema(
       default: false,
     },
 
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
+
+    emailVerificationOtpHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+
+    emailVerificationOtpExpiresAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+
+    emailVerificationLastSentAt: {
+      type: Date,
+      default: null,
+    },
+
+    emailVerificationAttemptCount: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
+
     locationRiskCategory: {
       type: String,
       enum: ['low_risk_zone', 'moderate_risk_zone', 'high_risk_zone', 'very_high_risk_zone'],

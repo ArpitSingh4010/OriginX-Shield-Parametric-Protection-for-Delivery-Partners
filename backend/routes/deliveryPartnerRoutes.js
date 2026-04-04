@@ -13,12 +13,16 @@
 
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const DeliveryPartner = require('../models/DeliveryPartner');
 const { validateIncomingRequest } = require('../middleware/validationMiddleware');
 const { assessCityRiskWithAi } = require('../services/aiIntegrationService');
+const { sendPartnerVerificationEmail } = require('../services/emailService');
 const {
   deliveryPartnerRegistrationValidators,
   deliveryPartnerLoginValidators,
+  emailVerificationOtpRequestValidators,
+  emailVerificationOtpVerifyValidators,
   deliveryPartnerIdParamValidators,
 } = require('../validators/requestValidators');
 
@@ -29,6 +33,180 @@ const ALLOWED_LOCATION_RISK_CATEGORIES = new Set([
   'high_risk_zone',
   'very_high_risk_zone',
 ]);
+
+const OTP_EXPIRY_MINUTES = 10;
+const OTP_RESEND_COOLDOWN_SECONDS = 60;
+
+function generateEmailVerificationCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function hashVerificationCode(verificationCode) {
+  return crypto.createHash('sha256').update(String(verificationCode)).digest('hex');
+}
+
+async function issueAndSendEmailVerificationCode(deliveryPartner) {
+  const now = new Date();
+
+  if (deliveryPartner.emailVerificationLastSentAt) {
+    const secondsSinceLastSend = Math.floor((now.getTime() - new Date(deliveryPartner.emailVerificationLastSentAt).getTime()) / 1000);
+    if (secondsSinceLastSend < OTP_RESEND_COOLDOWN_SECONDS) {
+      const waitSeconds = OTP_RESEND_COOLDOWN_SECONDS - secondsSinceLastSend;
+      return {
+        success: false,
+        statusCode: 429,
+        message: `Please wait ${waitSeconds}s before requesting another verification code.`,
+      };
+    }
+  }
+
+  const verificationCode = generateEmailVerificationCode();
+  deliveryPartner.emailVerificationOtpHash = hashVerificationCode(verificationCode);
+  deliveryPartner.emailVerificationOtpExpiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000);
+  deliveryPartner.emailVerificationLastSentAt = now;
+  deliveryPartner.emailVerificationAttemptCount = 0;
+  await deliveryPartner.save();
+
+  const emailDeliveryResult = await sendPartnerVerificationEmail({
+    recipientEmailAddress: deliveryPartner.emailAddress,
+    recipientFullName: deliveryPartner.fullName,
+    verificationCode,
+  });
+
+  return {
+    success: true,
+    statusCode: 200,
+    emailDeliveryResult,
+  };
+}
+
+deliveryPartnerRouter.post(
+  '/request-email-verification-otp',
+  emailVerificationOtpRequestValidators,
+  validateIncomingRequest,
+  async (request, response) => {
+    try {
+      const normalisedEmailAddress = String(request.body.emailAddress).toLowerCase();
+
+      const deliveryPartner = await DeliveryPartner.findOne({
+        emailAddress: normalisedEmailAddress,
+      }).select('+emailVerificationOtpHash +emailVerificationOtpExpiresAt +emailVerificationAttemptCount');
+
+      if (!deliveryPartner) {
+        return response.status(404).json({
+          success: false,
+          message: 'Delivery partner not found for this email address.',
+        });
+      }
+
+      if (deliveryPartner.isEmailVerified) {
+        return response.status(200).json({
+          success: true,
+          message: 'Email is already verified for this partner.',
+        });
+      }
+
+      const otpIssueResult = await issueAndSendEmailVerificationCode(deliveryPartner);
+      if (!otpIssueResult.success) {
+        return response.status(otpIssueResult.statusCode).json({
+          success: false,
+          message: otpIssueResult.message,
+        });
+      }
+
+      return response.status(200).json({
+        success: true,
+        message: 'Verification code sent to email address.',
+        emailDelivery: otpIssueResult.emailDeliveryResult,
+      });
+    } catch (otpRequestError) {
+      return response.status(500).json({
+        success: false,
+        message: 'Failed to send verification code.',
+        errorDetails: otpRequestError.message,
+      });
+    }
+  }
+);
+
+deliveryPartnerRouter.post(
+  '/verify-email-otp',
+  emailVerificationOtpVerifyValidators,
+  validateIncomingRequest,
+  async (request, response) => {
+    try {
+      const normalisedEmailAddress = String(request.body.emailAddress).toLowerCase();
+      const verificationCode = String(request.body.verificationCode).trim();
+
+      const deliveryPartner = await DeliveryPartner.findOne({
+        emailAddress: normalisedEmailAddress,
+      }).select('+emailVerificationOtpHash +emailVerificationOtpExpiresAt +emailVerificationAttemptCount');
+
+      if (!deliveryPartner) {
+        return response.status(404).json({
+          success: false,
+          message: 'Delivery partner not found for this email address.',
+        });
+      }
+
+      if (deliveryPartner.isEmailVerified) {
+        return response.status(200).json({
+          success: true,
+          message: 'Email already verified.',
+        });
+      }
+
+      if (!deliveryPartner.emailVerificationOtpHash || !deliveryPartner.emailVerificationOtpExpiresAt) {
+        return response.status(400).json({
+          success: false,
+          message: 'No active verification code. Please request a new code.',
+        });
+      }
+
+      if (new Date(deliveryPartner.emailVerificationOtpExpiresAt).getTime() < Date.now()) {
+        return response.status(400).json({
+          success: false,
+          message: 'Verification code expired. Please request a new code.',
+        });
+      }
+
+      const isVerificationCodeValid = hashVerificationCode(verificationCode) === deliveryPartner.emailVerificationOtpHash;
+      if (!isVerificationCodeValid) {
+        deliveryPartner.emailVerificationAttemptCount = Number(deliveryPartner.emailVerificationAttemptCount || 0) + 1;
+        await deliveryPartner.save();
+
+        return response.status(400).json({
+          success: false,
+          message: 'Invalid verification code.',
+        });
+      }
+
+      deliveryPartner.isEmailVerified = true;
+      deliveryPartner.isAccountVerified = true;
+      deliveryPartner.emailVerificationOtpHash = null;
+      deliveryPartner.emailVerificationOtpExpiresAt = null;
+      deliveryPartner.emailVerificationAttemptCount = 0;
+      await deliveryPartner.save();
+
+      return response.status(200).json({
+        success: true,
+        message: 'Email verified successfully.',
+        deliveryPartner: {
+          partnerId: deliveryPartner._id,
+          fullName: deliveryPartner.fullName,
+          emailAddress: deliveryPartner.emailAddress,
+          isEmailVerified: true,
+        },
+      });
+    } catch (otpVerifyError) {
+      return response.status(500).json({
+        success: false,
+        message: 'Failed to verify email code.',
+        errorDetails: otpVerifyError.message,
+      });
+    }
+  }
+);
 
 deliveryPartnerRouter.post(
   '/login',
@@ -54,6 +232,13 @@ deliveryPartnerRouter.post(
         return response.status(401).json({
           success: false,
           message: 'Invalid email or password.',
+        });
+      }
+
+      if (!deliveryPartner.isEmailVerified) {
+        return response.status(403).json({
+          success: false,
+          message: 'Email is not verified. Please verify your email with OTP first.',
         });
       }
 
@@ -157,13 +342,16 @@ deliveryPartnerRouter.post(
       deliveryPlatformNames,
       averageMonthlyEarningsInRupees: averageMonthlyEarningsInRupees || null,
       locationRiskCategory: resolvedRiskAssessment.assignedRiskCategory,
+      isEmailVerified: false,
+      isAccountVerified: false,
     });
 
     const savedDeliveryPartner = await newDeliveryPartner.save();
+    const otpIssueResult = await issueAndSendEmailVerificationCode(savedDeliveryPartner);
 
     return response.status(201).json({
       success: true,
-      message: 'Delivery partner registered successfully.',
+      message: 'Delivery partner registered successfully. Verify email with OTP to activate account.',
       deliveryPartner: {
         partnerId: savedDeliveryPartner._id,
         fullName: savedDeliveryPartner.fullName,
@@ -174,7 +362,10 @@ deliveryPartnerRouter.post(
         locationRiskAssessmentSource: resolvedRiskAssessment.source,
         locationRiskScore: resolvedRiskAssessment.computedRiskScore,
         accountRegistrationDate: savedDeliveryPartner.accountRegistrationDate,
+        isEmailVerified: savedDeliveryPartner.isEmailVerified,
       },
+      emailVerificationRequired: true,
+      emailDelivery: otpIssueResult.emailDeliveryResult,
     });
   } catch (registrationError) {
     return response.status(500).json({

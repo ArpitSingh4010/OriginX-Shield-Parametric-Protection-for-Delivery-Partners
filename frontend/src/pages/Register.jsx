@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { registerPartner, subscribePolicy, aiQuickRiskAssess } from '../api/rakshaRideApi';
+import {
+  registerPartner,
+  subscribePolicy,
+  aiQuickRiskAssess,
+  verifyPartnerEmailOtp,
+  requestPartnerEmailVerificationOtp,
+} from '../api/rakshaRideApi';
 
 const PLATFORMS = ['swiggy', 'zomato', 'dunzo', 'blinkit', 'other'];
 const CITIES = ['Chennai', 'Mumbai', 'Delhi', 'Bengaluru', 'Hyderabad', 'Kolkata', 'Pune', 'Ahmedabad'];
@@ -33,8 +39,10 @@ const PLANS = [
   { tier: 'premium',  premium: 60,  coverage: 700,  icon: '' },
 ];
 
-const STEP_LABELS = ['Personal Details', 'Work Details', 'Choose Plan'];
+const STEP_LABELS = ['Personal Details', 'Work Details', 'Verify Email', 'Choose Plan'];
 const formatInr = (amount) => `₹${Number(amount || 0).toLocaleString('en-IN')}`;
+
+const EMAIL_VERIFICATION_STEP = 2;
 
 export default function Register() {
   const navigate = useNavigate();
@@ -54,6 +62,10 @@ export default function Register() {
   const [selectedPlan,       setSelectedPlan]       = useState('standard');
   const [policy,             setPolicy]             = useState(null);
   const [copied,             setCopied]             = useState(false);
+  const [verificationCode,   setVerificationCode]   = useState('');
+  const [verificationHint,   setVerificationHint]   = useState('');
+  const [verifyingOtp,       setVerifyingOtp]       = useState(false);
+  const [resendingOtp,       setResendingOtp]       = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -99,9 +111,56 @@ export default function Register() {
         primaryDeliveryZoneCoordinates: coords,
       });
       setRegisteredPartner(res.deliveryPartner);
-      setStep(2);
+      setVerificationHint(res?.emailDelivery?.message || 'Verification code sent to your email address.');
+      setStep(EMAIL_VERIFICATION_STEP);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
+  };
+
+  const handleVerifyEmailOtp = async () => {
+    if (!registeredPartner?.emailAddress) {
+      setError('Missing registered email address. Please register again.');
+      return;
+    }
+    if (String(verificationCode).trim().length !== 6) {
+      setError('Enter the 6-digit verification code sent to your email.');
+      return;
+    }
+
+    setError('');
+    setVerifyingOtp(true);
+    try {
+      await verifyPartnerEmailOtp({
+        emailAddress: registeredPartner.emailAddress,
+        verificationCode: String(verificationCode).trim(),
+      });
+      setStep(3);
+      setVerificationHint('Email verified. Continue to choose your plan.');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
+  const handleResendEmailOtp = async () => {
+    if (!registeredPartner?.emailAddress) {
+      setError('Missing registered email address. Please register again.');
+      return;
+    }
+
+    setError('');
+    setResendingOtp(true);
+    try {
+      const resendResponse = await requestPartnerEmailVerificationOtp({
+        emailAddress: registeredPartner.emailAddress,
+      });
+      setVerificationHint(resendResponse?.emailDelivery?.message || resendResponse?.message || 'Verification code resent.');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setResendingOtp(false);
+    }
   };
 
   /*  Step 2: subscribe  */
@@ -113,7 +172,7 @@ export default function Register() {
         selectedPlanTier: selectedPlan,
       });
       setPolicy(res.insurancePolicy);
-      setStep(3);
+      setStep(4);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   };
@@ -125,7 +184,7 @@ export default function Register() {
   };
 
   /*  Success screen  */
-  if (step === 3 && policy) {
+  if (step === 4 && policy) {
     return (
       <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6rem 1rem' }}>
         <div className="card animate-slide-up" style={{ maxWidth: 500, width: '100%', textAlign: 'center' }}>
@@ -272,8 +331,44 @@ export default function Register() {
             </div>
           )}
 
-          {/*  Step 2: Plan  */}
+          {/*  Step 2: Verify Email */}
           {step === 2 && registeredPartner && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="alert alert-warning" style={{ marginBottom: '0.25rem' }}>
+                Verify your email before activating any plan.
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Registered Email Address</label>
+                <input className="form-input" value={registeredPartner.emailAddress || ''} disabled />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Verification Code</label>
+                <input
+                  className="form-input"
+                  placeholder="Enter 6-digit code"
+                  maxLength={6}
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                />
+                {verificationHint && <div className="form-hint" style={{ color: 'var(--text-secondary)' }}>{verificationHint}</div>}
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button className="btn btn-secondary" onClick={() => setStep(1)}>Back</button>
+                <button className="btn btn-secondary" onClick={handleResendEmailOtp} disabled={resendingOtp}>
+                  {resendingOtp ? 'Resending...' : 'Resend Code'}
+                </button>
+                <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleVerifyEmailOtp} disabled={verifyingOtp}>
+                  {verifyingOtp ? 'Verifying...' : 'Verify Email'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/*  Step 3: Plan  */}
+          {step === 3 && registeredPartner && (
             <div>
               <div className="alert alert-success" style={{ marginBottom: '1.25rem' }}>
                  Registered as <strong>{registeredPartner.fullName}</strong> in {registeredPartner.primaryDeliveryCity}

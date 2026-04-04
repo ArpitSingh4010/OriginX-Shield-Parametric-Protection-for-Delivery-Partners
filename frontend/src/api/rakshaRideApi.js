@@ -55,6 +55,8 @@ function createAdminAuthHeaders(adminAccessToken) {
 // ----- Delivery Partners -----------------------------------------------------
 export const registerPartner     = (body)           => request(`${BASE}/delivery-partners/register`, { method: 'POST', body: JSON.stringify(body) });
 export const loginDeliveryPartner = (body)          => request(`${BASE}/delivery-partners/login`, { method: 'POST', body: JSON.stringify(body) });
+export const requestPartnerEmailVerificationOtp = (body) => request(`${BASE}/delivery-partners/request-email-verification-otp`, { method: 'POST', body: JSON.stringify(body) });
+export const verifyPartnerEmailOtp = (body) => request(`${BASE}/delivery-partners/verify-email-otp`, { method: 'POST', body: JSON.stringify(body) });
 export const getPartner          = (id)             => request(`${BASE}/delivery-partners/${id}`);
 export const listPartners        = (params = {})    => request(`${BASE}/delivery-partners?${new URLSearchParams(params)}`);
 export const verifyPartner       = (id)             => request(`${BASE}/delivery-partners/${id}/verify`, { method: 'PATCH' });

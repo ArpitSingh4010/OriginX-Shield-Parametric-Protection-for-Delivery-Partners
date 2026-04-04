@@ -22,6 +22,20 @@ const deliveryPartnerLoginValidators = [
   body('password').notEmpty().withMessage('password is required.'),
 ];
 
+const emailVerificationOtpRequestValidators = [
+  body('emailAddress').isEmail().withMessage('emailAddress must be a valid email.'),
+];
+
+const emailVerificationOtpVerifyValidators = [
+  body('emailAddress').isEmail().withMessage('emailAddress must be a valid email.'),
+  body('verificationCode')
+    .trim()
+    .isLength({ min: 6, max: 6 })
+    .withMessage('verificationCode must be a 6 digit code.')
+    .isNumeric()
+    .withMessage('verificationCode must contain only numbers.'),
+];
+
 const deliveryPartnerIdParamValidators = [
   param('partnerId').isMongoId().withMessage('partnerId must be a valid MongoDB ID.'),
 ];
@@ -74,6 +88,8 @@ const claimIdParamValidators = [
 module.exports = {
   deliveryPartnerRegistrationValidators,
   deliveryPartnerLoginValidators,
+  emailVerificationOtpRequestValidators,
+  emailVerificationOtpVerifyValidators,
   deliveryPartnerIdParamValidators,
   subscribePolicyValidators,
   policyIdParamValidators,
