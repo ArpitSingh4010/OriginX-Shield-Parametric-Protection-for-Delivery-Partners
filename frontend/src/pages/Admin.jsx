@@ -35,6 +35,20 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
   const [newAdmin, setNewAdmin] = useState({ fullName: '', emailAddress: '', password: '' });
   const [creatingAdmin, setCreatingAdmin] = useState(false);
 
+  const isAuthSessionError = (message = '') => {
+    const normalized = String(message).toLowerCase();
+    return normalized.includes('authorization token is required')
+      || normalized.includes('invalid or expired authorization token')
+      || normalized.includes('jwt');
+  };
+
+  const handleSessionExpiry = (errorMessage) => {
+    showToast(errorMessage || 'Your admin session expired. Please login again.');
+    if (onAdminLogout) {
+      onAdminLogout();
+    }
+  };
+
   // New event form
   const [newEvent, setNewEvent] = useState({
     disruptionType: 'heavy_rainfall', affectedCityName: 'Chennai',
@@ -89,6 +103,12 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
           .map((response) => response.reason?.message)
           .filter(Boolean)
           .join(' | ');
+
+        if (isAuthSessionError(combinedErrorMessage)) {
+          handleSessionExpiry(combinedErrorMessage);
+          return;
+        }
+
         showToast(`Some data failed to load: ${combinedErrorMessage || 'Unknown error.'}`);
       }
     } catch (err) {
@@ -131,13 +151,36 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
 
     setCreating(true);
     try {
+      const rainfall = Number(newEvent.measuredRainfallInMillimetres);
+      const temperature = Number(newEvent.measuredTemperatureInCelsius);
+      const airQuality = Number(newEvent.measuredAirQualityIndex);
+      const lpgShortage = Number(newEvent.measuredLpgShortageSeverityIndex);
+      const radius = Number(newEvent.affectedRadiusInKilometres);
+
+      if (!Number.isFinite(radius) || radius <= 0) {
+        showToast('Please provide a valid affected radius (km).');
+        return;
+      }
+
       await createDisruptionEvent({
         ...newEvent,
+        measuredRainfallInMillimetres: Number.isFinite(rainfall) ? rainfall : null,
+        measuredTemperatureInCelsius: Number.isFinite(temperature) ? temperature : null,
+        measuredAirQualityIndex: Number.isFinite(airQuality) ? airQuality : null,
+        measuredLpgShortageSeverityIndex: Number.isFinite(lpgShortage) ? lpgShortage : null,
+        affectedRadiusInKilometres: radius,
         disruptionStartTimestamp: new Date().toISOString(),
       }, adminAccessToken);
       showToast('Disruption event created ');
       loadData();
-    } catch (e) { showToast('Failed: ' + e.message); }
+    } catch (e) {
+      if (isAuthSessionError(e.message)) {
+        handleSessionExpiry(e.message);
+        return;
+      }
+
+      showToast('Failed: ' + e.message);
+    }
     finally { setCreating(false); }
   };
 
@@ -156,6 +199,11 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
       showToast('Auto-claim trigger completed for event.');
       loadData();
     } catch (error) {
+      if (isAuthSessionError(error.message)) {
+        handleSessionExpiry(error.message);
+        return;
+      }
+
       showToast(`Auto-claim trigger failed: ${error.message}`);
     } finally {
       setTriggeringEventId('');
@@ -202,6 +250,11 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
       const adminList = await listAdminUsers(adminAccessToken);
       setAdminUsers(adminList.adminUsers || []);
     } catch (error) {
+      if (isAuthSessionError(error.message)) {
+        handleSessionExpiry(error.message);
+        return;
+      }
+
       showToast(`Failed to create admin: ${error.message}`);
     } finally {
       setCreatingAdmin(false);

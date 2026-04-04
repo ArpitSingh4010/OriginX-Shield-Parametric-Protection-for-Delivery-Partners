@@ -65,6 +65,12 @@ function ClaimModal({ partner, policy, events, onClose, onSuccess }) {
         {error && <div className="alert alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+          {events.length === 0 && (
+            <div className="alert alert-warning" style={{ marginBottom: '0.4rem' }}>
+              No disruption events available yet. Ask admin to create an event first.
+            </div>
+          )}
+
           <div className="form-group">
             <label className="form-label">Disruption Event</label>
             <select className="form-select" value={form.triggeringDisruptionEventId}
