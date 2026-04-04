@@ -213,6 +213,8 @@ Admin panel exists for judge/demo operations:
 - route: `/admin`
 - frontend gate via `VITE_ADMIN_ACCESS_KEY`
 - supports weather checks, disruption event creation, event-level auto-claim trigger, and flagged-claim review
+- admin login email: `verdhanchiku@gmail.com`
+- admin login password: `pass321`
 
 
 ## Payment Mode 
@@ -385,7 +387,7 @@ npm run build
 
 ## Demo Assets
 
+- Website: https://raksha-ride.vercel.app/
 - Demo video:https://youtu.be/fXFalfp_7NA?si=Xr1wwxWuCuQ--4ba
 - Architecture diagram: https://github.com/user-attachments/assets/9107d99c-d7ef-4b40-bc98-940dc99d9e12
 - Workflow diagram: https://github.com/user-attachments/assets/97824b2b-dddb-4aa1-9db9-ee80a4e600ad
-
