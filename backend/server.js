@@ -11,6 +11,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const mongoose = require('mongoose');
 
 const { connectToDatabase } = require('./config/databaseConfig');
 const { startWeatherMonitoring, runWeatherMonitoringCycle } = require('./services/weatherMonitoringService');
@@ -58,6 +59,24 @@ expressApplication.use(cors({
 }));
 expressApplication.use(express.json());
 
+// In serverless deployments the startup path may be skipped, so ensure DB connectivity on demand.
+expressApplication.use(async (request, response, next) => {
+  if (process.env.NODE_ENV === 'test') {
+    return next();
+  }
+
+  try {
+    await connectToDatabase();
+    return next();
+  } catch (error) {
+    return response.status(500).json({
+      success: false,
+      message: 'Database connection unavailable',
+      errorDetails: error.message,
+    });
+  }
+});
+
 // ================================ API Routes ================================
 
 expressApplication.use('/api/delivery-partners',  deliveryPartnerRouter);
@@ -93,9 +112,13 @@ expressApplication.get('/', (request, response) => {
 });
 
 expressApplication.get('/api/health', (request, response) => {
+  const mongooseState = mongoose.connection.readyState;
+  const databaseStatus = mongooseState === 1 ? 'connected' : 'disconnected';
+
   response.status(200).json({
     status:          'healthy',
     serviceName:     'RakshaRide Parametric Insurance API',
+    databaseStatus,
     serverTimestamp: new Date().toISOString(),
     environment:     process.env.NODE_ENV || 'development',
     paymentMode:     require('./services/paymentService').IS_PAYMENT_STUB_MODE ? 'stub' : 'live',

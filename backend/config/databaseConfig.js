@@ -7,6 +7,7 @@
 const mongoose = require('mongoose');
 
 const MONGODB_CONNECTION_URI = process.env.MONGODB_URI;
+let activeConnectionPromise = null;
 
 const MONGOOSE_CONNECTION_OPTIONS = {
   useNewUrlParser: true,
@@ -20,20 +21,30 @@ const MONGOOSE_CONNECTION_OPTIONS = {
  * @returns {Promise<void>}
  */
 async function connectToDatabase() {
-  try {
-    if (!MONGODB_CONNECTION_URI) {
-      throw new Error('MONGODB_URI environment variable is not configured.');
-    }
-
-    await mongoose.connect(MONGODB_CONNECTION_URI, MONGOOSE_CONNECTION_OPTIONS);
-    console.log('Successfully connected to MongoDB database');
-  } catch (databaseConnectionError) {
-    console.error(
-      'Failed to connect to MongoDB database:',
-      databaseConnectionError.message
-    );
-    process.exit(1);
+  if (!MONGODB_CONNECTION_URI) {
+    throw new Error('MONGODB_URI environment variable is not configured.');
   }
+
+  // readyState: 1 = connected, 2 = connecting.
+  if (mongoose.connection.readyState === 1) {
+    return;
+  }
+
+  if (activeConnectionPromise) {
+    await activeConnectionPromise;
+    return;
+  }
+
+  activeConnectionPromise = mongoose
+    .connect(MONGODB_CONNECTION_URI, MONGOOSE_CONNECTION_OPTIONS)
+    .then(() => {
+      console.log('Successfully connected to MongoDB database');
+    })
+    .finally(() => {
+      activeConnectionPromise = null;
+    });
+
+  await activeConnectionPromise;
 }
 
 /**
