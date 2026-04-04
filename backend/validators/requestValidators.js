@@ -36,6 +36,21 @@ const emailVerificationOtpVerifyValidators = [
     .withMessage('verificationCode must contain only numbers.'),
 ];
 
+const forgotPasswordOtpRequestValidators = [
+  body('emailAddress').isEmail().withMessage('emailAddress must be a valid email.'),
+];
+
+const resetPasswordWithOtpValidators = [
+  body('emailAddress').isEmail().withMessage('emailAddress must be a valid email.'),
+  body('resetCode')
+    .trim()
+    .isLength({ min: 6, max: 6 })
+    .withMessage('resetCode must be a 6 digit code.')
+    .isNumeric()
+    .withMessage('resetCode must contain only numbers.'),
+  body('newPassword').isLength({ min: 6 }).withMessage('newPassword must be at least 6 characters long.'),
+];
+
 const deliveryPartnerIdParamValidators = [
   param('partnerId').isMongoId().withMessage('partnerId must be a valid MongoDB ID.'),
 ];
@@ -90,6 +105,8 @@ module.exports = {
   deliveryPartnerLoginValidators,
   emailVerificationOtpRequestValidators,
   emailVerificationOtpVerifyValidators,
+  forgotPasswordOtpRequestValidators,
+  resetPasswordWithOtpValidators,
   deliveryPartnerIdParamValidators,
   subscribePolicyValidators,
   policyIdParamValidators,

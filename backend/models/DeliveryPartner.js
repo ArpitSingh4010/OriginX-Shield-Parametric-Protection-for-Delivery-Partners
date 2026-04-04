@@ -90,6 +90,29 @@ const deliveryPartnerSchema = new mongoose.Schema(
       select: false,
     },
 
+    passwordResetOtpHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+
+    passwordResetOtpExpiresAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+
+    passwordResetLastSentAt: {
+      type: Date,
+      default: null,
+    },
+
+    passwordResetAttemptCount: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
+
     locationRiskCategory: {
       type: String,
       enum: ['low_risk_zone', 'moderate_risk_zone', 'high_risk_zone', 'very_high_risk_zone'],

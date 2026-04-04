@@ -5,7 +5,7 @@ import {
   subscribePolicy,
   aiQuickRiskAssess,
   verifyPartnerEmailOtp,
-  requestPartnerEmailVerificationOtp,
+  resendPartnerEmailVerificationOtp,
 } from '../api/rakshaRideApi';
 
 const PLATFORMS = ['swiggy', 'zomato', 'dunzo', 'blinkit', 'other'];
@@ -152,7 +152,7 @@ export default function Register() {
     setError('');
     setResendingOtp(true);
     try {
-      const resendResponse = await requestPartnerEmailVerificationOtp({
+      const resendResponse = await resendPartnerEmailVerificationOtp({
         emailAddress: registeredPartner.emailAddress,
       });
       setVerificationHint(resendResponse?.emailDelivery?.message || resendResponse?.message || 'Verification code resent.');

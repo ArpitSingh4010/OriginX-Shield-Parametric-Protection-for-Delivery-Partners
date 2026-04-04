@@ -68,6 +68,42 @@ async function sendPartnerVerificationEmail({ recipientEmailAddress, recipientFu
   };
 }
 
+async function sendPartnerPasswordResetEmail({ recipientEmailAddress, recipientFullName, resetCode }) {
+  const transporter = getMailTransporter();
+
+  const subject = 'Your RakshaRide password reset code';
+  const text = [
+    `Hi ${recipientFullName || 'Partner'},`,
+    '',
+    `Your RakshaRide password reset code is: ${resetCode}`,
+    '',
+    'This code expires in 10 minutes.',
+    '',
+    'If you did not request a password reset, you can ignore this email.',
+  ].join('\n');
+
+  if (!transporter) {
+    console.warn(`[EmailService] SMTP not configured. Password reset OTP for ${recipientEmailAddress}: ${resetCode}`);
+    return {
+      wasSent: false,
+      message: 'SMTP not configured. Password reset OTP logged to server console for development.',
+    };
+  }
+
+  await transporter.sendMail({
+    from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`,
+    to: recipientEmailAddress,
+    subject,
+    text,
+  });
+
+  return {
+    wasSent: true,
+    message: 'Password reset email sent successfully.',
+  };
+}
+
 module.exports = {
   sendPartnerVerificationEmail,
+  sendPartnerPasswordResetEmail,
 };

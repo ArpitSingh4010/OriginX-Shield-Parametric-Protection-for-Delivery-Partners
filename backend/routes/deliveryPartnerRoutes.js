@@ -14,15 +14,19 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const DeliveryPartner = require('../models/DeliveryPartner');
 const { validateIncomingRequest } = require('../middleware/validationMiddleware');
 const { assessCityRiskWithAi } = require('../services/aiIntegrationService');
-const { sendPartnerVerificationEmail } = require('../services/emailService');
+const { sendPartnerVerificationEmail, sendPartnerPasswordResetEmail } = require('../services/emailService');
+const { getJwtSecret } = require('../config/authConfig');
 const {
   deliveryPartnerRegistrationValidators,
   deliveryPartnerLoginValidators,
   emailVerificationOtpRequestValidators,
   emailVerificationOtpVerifyValidators,
+  forgotPasswordOtpRequestValidators,
+  resetPasswordWithOtpValidators,
   deliveryPartnerIdParamValidators,
 } = require('../validators/requestValidators');
 
@@ -36,6 +40,7 @@ const ALLOWED_LOCATION_RISK_CATEGORIES = new Set([
 
 const OTP_EXPIRY_MINUTES = 10;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
+const MAX_OTP_ATTEMPTS = 5;
 
 function generateEmailVerificationCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -78,6 +83,60 @@ async function issueAndSendEmailVerificationCode(deliveryPartner) {
     statusCode: 200,
     emailDeliveryResult,
   };
+}
+
+async function issueAndSendPasswordResetCode(deliveryPartner) {
+  const now = new Date();
+
+  if (deliveryPartner.passwordResetLastSentAt) {
+    const secondsSinceLastSend = Math.floor((now.getTime() - new Date(deliveryPartner.passwordResetLastSentAt).getTime()) / 1000);
+    if (secondsSinceLastSend < OTP_RESEND_COOLDOWN_SECONDS) {
+      const waitSeconds = OTP_RESEND_COOLDOWN_SECONDS - secondsSinceLastSend;
+      return {
+        success: false,
+        statusCode: 429,
+        message: `Please wait ${waitSeconds}s before requesting another reset code.`,
+      };
+    }
+  }
+
+  const resetCode = generateEmailVerificationCode();
+  deliveryPartner.passwordResetOtpHash = hashVerificationCode(resetCode);
+  deliveryPartner.passwordResetOtpExpiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000);
+  deliveryPartner.passwordResetLastSentAt = now;
+  deliveryPartner.passwordResetAttemptCount = 0;
+  await deliveryPartner.save();
+
+  const emailDeliveryResult = await sendPartnerPasswordResetEmail({
+    recipientEmailAddress: deliveryPartner.emailAddress,
+    recipientFullName: deliveryPartner.fullName,
+    resetCode,
+  });
+
+  return {
+    success: true,
+    statusCode: 200,
+    emailDeliveryResult,
+  };
+}
+
+function signPartnerAccessToken(deliveryPartner) {
+  const jwtSecret = getJwtSecret();
+  if (!jwtSecret) {
+    return null;
+  }
+
+  return jwt.sign(
+    {
+      sub: deliveryPartner._id.toString(),
+      role: 'partner',
+      emailAddress: deliveryPartner.emailAddress,
+    },
+    jwtSecret,
+    {
+      expiresIn: '8h',
+    }
+  );
 }
 
 deliveryPartnerRouter.post(
@@ -173,6 +232,18 @@ deliveryPartnerRouter.post(
       const isVerificationCodeValid = hashVerificationCode(verificationCode) === deliveryPartner.emailVerificationOtpHash;
       if (!isVerificationCodeValid) {
         deliveryPartner.emailVerificationAttemptCount = Number(deliveryPartner.emailVerificationAttemptCount || 0) + 1;
+
+        if (deliveryPartner.emailVerificationAttemptCount >= MAX_OTP_ATTEMPTS) {
+          deliveryPartner.emailVerificationOtpHash = null;
+          deliveryPartner.emailVerificationOtpExpiresAt = null;
+          await deliveryPartner.save();
+
+          return response.status(429).json({
+            success: false,
+            message: 'Too many invalid OTP attempts. Request a new verification code.',
+          });
+        }
+
         await deliveryPartner.save();
 
         return response.status(400).json({
@@ -242,9 +313,20 @@ deliveryPartnerRouter.post(
         });
       }
 
+      const accessToken = signPartnerAccessToken(deliveryPartner);
+      if (!accessToken) {
+        return response.status(500).json({
+          success: false,
+          message: 'JWT secret is not configured on the server.',
+        });
+      }
+
       return response.status(200).json({
         success: true,
         message: 'Delivery partner logged in successfully.',
+        accessToken,
+        tokenType: 'Bearer',
+        expiresIn: '8h',
         deliveryPartner: {
           partnerId: deliveryPartner._id,
           fullName: deliveryPartner.fullName,
@@ -256,6 +338,171 @@ deliveryPartnerRouter.post(
         success: false,
         message: 'Failed to login delivery partner.',
         errorDetails: loginError.message,
+      });
+    }
+  }
+);
+
+deliveryPartnerRouter.post(
+  '/resend-otp',
+  emailVerificationOtpRequestValidators,
+  validateIncomingRequest,
+  async (request, response) => {
+    try {
+      const normalisedEmailAddress = String(request.body.emailAddress).toLowerCase();
+
+      const deliveryPartner = await DeliveryPartner.findOne({
+        emailAddress: normalisedEmailAddress,
+      }).select('+emailVerificationOtpHash +emailVerificationOtpExpiresAt +emailVerificationAttemptCount');
+
+      if (!deliveryPartner) {
+        return response.status(404).json({
+          success: false,
+          message: 'Delivery partner not found for this email address.',
+        });
+      }
+
+      if (deliveryPartner.isEmailVerified) {
+        return response.status(200).json({
+          success: true,
+          message: 'Email is already verified for this partner.',
+        });
+      }
+
+      const otpIssueResult = await issueAndSendEmailVerificationCode(deliveryPartner);
+      if (!otpIssueResult.success) {
+        return response.status(otpIssueResult.statusCode).json({
+          success: false,
+          message: otpIssueResult.message,
+        });
+      }
+
+      return response.status(200).json({
+        success: true,
+        message: 'Verification code resent successfully.',
+        emailDelivery: otpIssueResult.emailDeliveryResult,
+      });
+    } catch (resendOtpError) {
+      return response.status(500).json({
+        success: false,
+        message: 'Failed to resend verification code.',
+        errorDetails: resendOtpError.message,
+      });
+    }
+  }
+);
+
+deliveryPartnerRouter.post(
+  '/forgot-password',
+  forgotPasswordOtpRequestValidators,
+  validateIncomingRequest,
+  async (request, response) => {
+    try {
+      const normalisedEmailAddress = String(request.body.emailAddress).toLowerCase();
+      const deliveryPartner = await DeliveryPartner.findOne({ emailAddress: normalisedEmailAddress })
+        .select('+passwordResetOtpHash +passwordResetOtpExpiresAt +passwordResetAttemptCount');
+
+      if (!deliveryPartner) {
+        return response.status(404).json({
+          success: false,
+          message: 'Delivery partner not found for this email address.',
+        });
+      }
+
+      const resetOtpResult = await issueAndSendPasswordResetCode(deliveryPartner);
+      if (!resetOtpResult.success) {
+        return response.status(resetOtpResult.statusCode).json({
+          success: false,
+          message: resetOtpResult.message,
+        });
+      }
+
+      return response.status(200).json({
+        success: true,
+        message: 'Password reset code sent to email address.',
+        emailDelivery: resetOtpResult.emailDeliveryResult,
+      });
+    } catch (forgotPasswordError) {
+      return response.status(500).json({
+        success: false,
+        message: 'Failed to process forgot password request.',
+        errorDetails: forgotPasswordError.message,
+      });
+    }
+  }
+);
+
+deliveryPartnerRouter.post(
+  '/reset-password',
+  resetPasswordWithOtpValidators,
+  validateIncomingRequest,
+  async (request, response) => {
+    try {
+      const normalisedEmailAddress = String(request.body.emailAddress).toLowerCase();
+      const resetCode = String(request.body.resetCode).trim();
+      const newPassword = String(request.body.newPassword);
+
+      const deliveryPartner = await DeliveryPartner.findOne({ emailAddress: normalisedEmailAddress })
+        .select('+passwordHash +passwordResetOtpHash +passwordResetOtpExpiresAt +passwordResetAttemptCount');
+
+      if (!deliveryPartner) {
+        return response.status(404).json({
+          success: false,
+          message: 'Delivery partner not found for this email address.',
+        });
+      }
+
+      if (!deliveryPartner.passwordResetOtpHash || !deliveryPartner.passwordResetOtpExpiresAt) {
+        return response.status(400).json({
+          success: false,
+          message: 'No active reset code. Please request a new password reset code.',
+        });
+      }
+
+      if (new Date(deliveryPartner.passwordResetOtpExpiresAt).getTime() < Date.now()) {
+        return response.status(400).json({
+          success: false,
+          message: 'Reset code expired. Please request a new code.',
+        });
+      }
+
+      const isResetCodeValid = hashVerificationCode(resetCode) === deliveryPartner.passwordResetOtpHash;
+      if (!isResetCodeValid) {
+        deliveryPartner.passwordResetAttemptCount = Number(deliveryPartner.passwordResetAttemptCount || 0) + 1;
+
+        if (deliveryPartner.passwordResetAttemptCount >= MAX_OTP_ATTEMPTS) {
+          deliveryPartner.passwordResetOtpHash = null;
+          deliveryPartner.passwordResetOtpExpiresAt = null;
+          await deliveryPartner.save();
+
+          return response.status(429).json({
+            success: false,
+            message: 'Too many invalid reset attempts. Request a new reset code.',
+          });
+        }
+
+        await deliveryPartner.save();
+        return response.status(400).json({
+          success: false,
+          message: 'Invalid reset code.',
+        });
+      }
+
+      deliveryPartner.passwordHash = await bcrypt.hash(newPassword, 10);
+      deliveryPartner.passwordResetOtpHash = null;
+      deliveryPartner.passwordResetOtpExpiresAt = null;
+      deliveryPartner.passwordResetAttemptCount = 0;
+      await deliveryPartner.save();
+
+      return response.status(200).json({
+        success: true,
+        message: 'Password reset successful. You can now login with the new password.',
+      });
+    } catch (resetPasswordError) {
+      return response.status(500).json({
+        success: false,
+        message: 'Failed to reset password.',
+        errorDetails: resetPasswordError.message,
       });
     }
   }
