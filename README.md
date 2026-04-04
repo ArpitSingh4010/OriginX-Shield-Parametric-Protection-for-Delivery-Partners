@@ -147,7 +147,7 @@ Let:
 
 Then:
 
-`Projected Loss Ratio = (C Ã— e) / Premium`
+`Projected Loss Ratio = (C × e) / Premium`
 
 Current config source: `backend/config/parametricInsuranceConstants.js` (`PREMIUM_MODEL_ASSUMPTIONS.EXPECTED_PAYOUT_SEVERITY_RATIO = 0.30`).
 
