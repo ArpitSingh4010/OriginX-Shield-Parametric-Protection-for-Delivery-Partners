@@ -19,6 +19,15 @@ async function request(url, options = {}) {
       : { message: await res.text() };
 
     if (!res.ok) {
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        const formattedValidationErrors = data.errors
+          .map((validationError) => validationError?.msg)
+          .filter(Boolean)
+          .join(' | ');
+
+        throw new Error(formattedValidationErrors || data.message || 'Request validation failed.');
+      }
+
       throw new Error(data.errorDetails || data.error || data.message || 'Request failed');
     }
 

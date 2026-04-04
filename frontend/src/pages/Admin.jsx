@@ -171,14 +171,32 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
   };
 
   const handleCreateAdmin = async () => {
-    if (!newAdmin.fullName.trim() || !newAdmin.emailAddress.trim() || !newAdmin.password.trim()) {
+    const normalisedFullName = String(newAdmin.fullName || '').trim();
+    const normalisedEmailAddress = String(newAdmin.emailAddress || '').trim().toLowerCase();
+    const normalisedPassword = String(newAdmin.password || '').trim();
+
+    if (!normalisedFullName || !normalisedEmailAddress || !normalisedPassword) {
       showToast('Please fill full name, email address, and password for new admin.');
+      return;
+    }
+
+    if (!/^\S+@\S+\.\S+$/.test(normalisedEmailAddress)) {
+      showToast('Please enter a valid email address for new admin.');
+      return;
+    }
+
+    if (normalisedPassword.length < 6) {
+      showToast('Admin password must be at least 6 characters long.');
       return;
     }
 
     setCreatingAdmin(true);
     try {
-      await addAdminUser(newAdmin, adminAccessToken);
+      await addAdminUser({
+        fullName: normalisedFullName,
+        emailAddress: normalisedEmailAddress,
+        password: normalisedPassword,
+      }, adminAccessToken);
       showToast('New admin created successfully.');
       setNewAdmin({ fullName: '', emailAddress: '', password: '' });
       const adminList = await listAdminUsers(adminAccessToken);
