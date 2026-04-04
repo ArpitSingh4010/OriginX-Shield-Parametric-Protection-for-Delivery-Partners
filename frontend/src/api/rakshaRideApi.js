@@ -64,6 +64,10 @@ export const getPartner          = (id)             => request(`${BASE}/delivery
 export const listPartners        = (params = {})    => request(`${BASE}/delivery-partners?${new URLSearchParams(params)}`);
 export const verifyPartner       = (id)             => request(`${BASE}/delivery-partners/${id}/verify`, { method: 'PATCH' });
 export const updatePartner       = (id, body)       => request(`${BASE}/delivery-partners/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const removePartner       = (id, adminAccessToken) => request(`${BASE}/delivery-partners/${id}`, {
+  method: 'DELETE',
+  headers: createAdminAuthHeaders(adminAccessToken),
+});
 
 // ----- Insurance Policies ----------------------------------------------------
 export const subscribePolicy          = (body)      => request(`${BASE}/insurance-policies/subscribe`,             { method: 'POST', body: JSON.stringify(body) });

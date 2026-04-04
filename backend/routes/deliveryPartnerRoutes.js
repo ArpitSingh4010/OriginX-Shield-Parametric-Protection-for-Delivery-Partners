@@ -16,6 +16,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const DeliveryPartner = require('../models/DeliveryPartner');
+const { authenticateRequestToken, requireAdminRole } = require('../middleware/authMiddleware');
 const { validateIncomingRequest } = require('../middleware/validationMiddleware');
 const { assessCityRiskWithAi } = require('../services/aiIntegrationService');
 const { sendPartnerVerificationEmail, sendPartnerPasswordResetEmail } = require('../services/emailService');
@@ -825,6 +826,46 @@ deliveryPartnerRouter.patch(
       errorDetails: updateError.message,
     });
   }
+  }
+);
+
+// ─── DELETE /api/delivery-partners/:partnerId ───────────────────────────────
+
+/**
+ * Removes a delivery partner account.
+ * Restricted to admin users only.
+ */
+deliveryPartnerRouter.delete(
+  '/:partnerId',
+  authenticateRequestToken,
+  requireAdminRole,
+  deliveryPartnerIdParamValidators,
+  validateIncomingRequest,
+  async (request, response) => {
+    try {
+      const { partnerId } = request.params;
+
+      const deletedDeliveryPartner = await DeliveryPartner.findByIdAndDelete(partnerId).select('fullName emailAddress');
+
+      if (!deletedDeliveryPartner) {
+        return response.status(404).json({
+          success: false,
+          message: `No delivery partner found with ID: ${partnerId}`,
+        });
+      }
+
+      return response.status(200).json({
+        success: true,
+        message: 'Delivery partner removed successfully.',
+        deletedDeliveryPartner,
+      });
+    } catch (deleteError) {
+      return response.status(500).json({
+        success: false,
+        message: 'Failed to remove delivery partner.',
+        errorDetails: deleteError.message,
+      });
+    }
   }
 );
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   getFlaggedClaims, reviewClaim, listDisruptionEvents,
   triggerWeatherCheck, createDisruptionEvent, listPartners, triggerClaimsForEvent,
-  addAdminUser, listAdminUsers,
+  addAdminUser, listAdminUsers, removePartner,
 } from '../api/rakshaRideApi';
 import StatusBadge from '../components/StatusBadge';
 
@@ -37,6 +37,7 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
   const [adminUsers, setAdminUsers] = useState([]);
   const [newAdmin, setNewAdmin] = useState({ fullName: '', emailAddress: '', password: '' });
   const [creatingAdmin, setCreatingAdmin] = useState(false);
+  const [removingPartnerId, setRemovingPartnerId] = useState('');
 
   const isAuthSessionError = (message = '') => {
     const normalized = String(message).toLowerCase();
@@ -263,6 +264,31 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
       setCreatingAdmin(false);
     }
   };
+
+  const handleRemovePartner = async (partnerId) => {
+    const targetPartner = partners.find((partner) => partner._id === partnerId);
+    const partnerLabel = targetPartner?.fullName || targetPartner?.emailAddress || 'this partner';
+    const shouldProceed = window.confirm(`Remove ${partnerLabel}? This action cannot be undone.`);
+    if (!shouldProceed) {
+      return;
+    }
+
+    setRemovingPartnerId(partnerId);
+    try {
+      await removePartner(partnerId, adminAccessToken);
+      showToast('Partner removed successfully.');
+      setPartners((previousPartners) => previousPartners.filter((partner) => partner._id !== partnerId));
+    } catch (error) {
+      if (isAuthSessionError(error.message)) {
+        handleSessionExpiry(error.message);
+        return;
+      }
+
+      showToast(`Failed to remove partner: ${error.message}`);
+    } finally {
+      setRemovingPartnerId('');
+    }
+  };
   const stats = [
     { icon: '', cls: 'stat-icon-indigo', label: 'Flagged Claims',   value: flagged.length },
     { icon: '', cls: 'stat-icon-amber',  label: 'Active Events',    value: events.filter(e => !e.hasAutomaticClaimTriggerBeenFired).length },
@@ -273,6 +299,7 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
   const TABS = [
     { id: 'claims',  label: `Flagged Claims (${flagged.length})` },
     { id: 'events',  label: `Disruption Events (${events.length})` },
+    { id: 'partners', label: `Partners (${partners.length})` },
     { id: 'weather', label: ' Weather Monitor' },
     { id: 'admins', label: `Admins (${adminUsers.length})` },
   ];
@@ -587,6 +614,59 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && tab === 'partners' && (
+          <div className="card">
+            <div style={{ fontWeight: 700, marginBottom: '1rem' }}>Registered Partners</div>
+            {partners.length === 0 ? (
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>No partners found.</div>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Phone</th>
+                      <th>City</th>
+                      <th>Platforms</th>
+                      <th>Verified</th>
+                      <th>Registered</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {partners.map((partner) => (
+                      <tr key={partner._id}>
+                        <td>{partner.fullName || 'N/A'}</td>
+                        <td>{partner.emailAddress || 'N/A'}</td>
+                        <td>{partner.mobilePhoneNumber || 'N/A'}</td>
+                        <td>{partner.primaryDeliveryCity || 'N/A'}</td>
+                        <td>{Array.isArray(partner.deliveryPlatformNames) ? partner.deliveryPlatformNames.join(', ') : 'N/A'}</td>
+                        <td>
+                          <span className={`badge ${partner.isAccountVerified ? 'badge-approved' : 'badge-pending'}`}>
+                            <span className="badge-dot" />
+                            {partner.isAccountVerified ? 'Yes' : 'No'}
+                          </span>
+                        </td>
+                        <td>{partner.accountRegistrationDate ? new Date(partner.accountRegistrationDate).toLocaleDateString('en-IN') : 'N/A'}</td>
+                        <td>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={() => handleRemovePartner(partner._id)}
+                            disabled={removingPartnerId === partner._id}
+                          >
+                            {removingPartnerId === partner._id ? 'Removing...' : 'Remove'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
