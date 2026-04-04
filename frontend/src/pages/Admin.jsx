@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   getFlaggedClaims, reviewClaim, listDisruptionEvents,
   triggerWeatherCheck, createDisruptionEvent, listPartners, triggerClaimsForEvent,
+  addAdminUser, listAdminUsers,
 } from '../api/rakshaRideApi';
 import StatusBadge from '../components/StatusBadge';
 
-export default function Admin() {
+export default function Admin({ adminAccessToken, adminProfile, onAdminLogout }) {
   const DISRUPTION_TYPE_OPTIONS = [
     'heavy_rainfall',
     'extreme_heat',
@@ -20,7 +21,6 @@ export default function Admin() {
     'other',
   ];
 
-  const ADMIN_SESSION_STORAGE_KEY = 'raksharide_admin_unlocked';
   const [flagged,   setFlagged]   = useState([]);
   const [events,    setEvents]    = useState([]);
   const [partners,  setPartners]  = useState([]);
@@ -31,6 +31,9 @@ export default function Admin() {
   const [toast,     setToast]     = useState('');
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherResult,  setWeatherResult]  = useState(null);
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [newAdmin, setNewAdmin] = useState({ fullName: '', emailAddress: '', password: '' });
+  const [creatingAdmin, setCreatingAdmin] = useState(false);
 
   // New event form
   const [newEvent, setNewEvent] = useState({
@@ -60,17 +63,19 @@ export default function Admin() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [f, e, p] = await Promise.all([
+      const [f, e, p, adminList] = await Promise.all([
         getFlaggedClaims({ limit: 50 }),
         listDisruptionEvents({ limit: 30 }),
         listPartners({ limit: 100 }),
+        listAdminUsers(adminAccessToken),
       ]);
       setFlagged(f.flaggedClaims || []);
       setEvents(e.disruptionEvents || []);
       setPartners(p.deliveryPartners || []);
+      setAdminUsers(adminList.adminUsers || []);
     } catch (err) { showToast('Failed to load data: ' + err.message); }
     finally { setLoading(false); }
-  }, []);
+  }, [adminAccessToken]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -140,10 +145,30 @@ export default function Admin() {
   const setEvt = (k, v) => setNewEvent(ev => ({ ...ev, [k]: v }));
 
   const handleAdminLogout = () => {
-    window.sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
-    window.location.href = '/';
+    if (onAdminLogout) {
+      onAdminLogout();
+    }
   };
 
+  const handleCreateAdmin = async () => {
+    if (!newAdmin.fullName.trim() || !newAdmin.emailAddress.trim() || !newAdmin.password.trim()) {
+      showToast('Please fill full name, email address, and password for new admin.');
+      return;
+    }
+
+    setCreatingAdmin(true);
+    try {
+      await addAdminUser(newAdmin, adminAccessToken);
+      showToast('New admin created successfully.');
+      setNewAdmin({ fullName: '', emailAddress: '', password: '' });
+      const adminList = await listAdminUsers(adminAccessToken);
+      setAdminUsers(adminList.adminUsers || []);
+    } catch (error) {
+      showToast(`Failed to create admin: ${error.message}`);
+    } finally {
+      setCreatingAdmin(false);
+    }
+  };
   const stats = [
     { icon: '', cls: 'stat-icon-indigo', label: 'Flagged Claims',   value: flagged.length },
     { icon: '', cls: 'stat-icon-amber',  label: 'Active Events',    value: events.filter(e => !e.hasAutomaticClaimTriggerBeenFired).length },
@@ -155,6 +180,7 @@ export default function Admin() {
     { id: 'claims',  label: `Flagged Claims (${flagged.length})` },
     { id: 'events',  label: `Disruption Events (${events.length})` },
     { id: 'weather', label: ' Weather Monitor' },
+    { id: 'admins', label: `Admins (${adminUsers.length})` },
   ];
 
   return (
@@ -174,6 +200,11 @@ export default function Admin() {
             <div>
               <div className="page-title">Admin Panel</div>
               <div className="page-sub">Manage claims, events and weather monitoring</div>
+              {adminProfile?.emailAddress && (
+                <div className="page-sub" style={{ marginTop: '0.2rem' }}>
+                  Signed in as {adminProfile.emailAddress}
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button className="btn btn-secondary btn-sm" onClick={loadData} disabled={loading}>
@@ -464,6 +495,77 @@ export default function Admin() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {!loading && tab === 'admins' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div className="card">
+              <div style={{ fontWeight: 700, marginBottom: '1rem' }}>Add Admin</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Full Name</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={newAdmin.fullName}
+                    onChange={(e) => setNewAdmin((prev) => ({ ...prev, fullName: e.target.value }))}
+                    placeholder="Admin full name"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email Address</label>
+                  <input
+                    className="form-input"
+                    type="email"
+                    value={newAdmin.emailAddress}
+                    onChange={(e) => setNewAdmin((prev) => ({ ...prev, emailAddress: e.target.value }))}
+                    placeholder="admin@example.com"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Password</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={newAdmin.password}
+                    onChange={(e) => setNewAdmin((prev) => ({ ...prev, password: e.target.value }))}
+                    placeholder="At least 6 characters"
+                  />
+                </div>
+              </div>
+              <button className="btn btn-primary" onClick={handleCreateAdmin} disabled={creatingAdmin}>
+                {creatingAdmin ? 'Creating Admin...' : 'Add Admin'}
+              </button>
+            </div>
+
+            <div className="card">
+              <div style={{ fontWeight: 700, marginBottom: '1rem' }}>Existing Admin Users</div>
+              {adminUsers.length === 0 ? (
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>No admin users found.</div>
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Created</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminUsers.map((adminUser) => (
+                        <tr key={adminUser._id || adminUser.emailAddress}>
+                          <td>{adminUser.fullName}</td>
+                          <td>{adminUser.emailAddress}</td>
+                          <td>{new Date(adminUser.createdAt).toLocaleDateString('en-IN')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

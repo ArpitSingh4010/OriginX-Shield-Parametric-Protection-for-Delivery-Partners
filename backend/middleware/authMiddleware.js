@@ -34,6 +34,18 @@ function authenticateRequestToken(request, response, next) {
   }
 }
 
+function requireAdminRole(request, response, next) {
+  if (!request.authenticatedUser || request.authenticatedUser.role !== 'admin') {
+    return response.status(403).json({
+      success: false,
+      message: 'Admin role is required for this action.',
+    });
+  }
+
+  return next();
+}
+
 module.exports = {
   authenticateRequestToken,
+  requireAdminRole,
 };

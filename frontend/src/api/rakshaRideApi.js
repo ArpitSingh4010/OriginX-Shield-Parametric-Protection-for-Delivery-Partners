@@ -33,6 +33,16 @@ async function request(url, options = {}) {
   }
 }
 
+function createAdminAuthHeaders(adminAccessToken) {
+  if (!adminAccessToken) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${adminAccessToken}`,
+  };
+}
+
 // ----- Delivery Partners -----------------------------------------------------
 export const registerPartner     = (body)           => request(`${BASE}/delivery-partners/register`, { method: 'POST', body: JSON.stringify(body) });
 export const getPartner          = (id)             => request(`${BASE}/delivery-partners/${id}`);
@@ -66,6 +76,16 @@ export const triggerClaimsForEvent      = (id, body)=> request(`${BASE}/disrupti
 // ----- Admin -----------------------------------------------------------------
 export const triggerWeatherCheck = () => request(`${BASE}/admin/trigger-weather-check`, { method: 'POST' });
 export const healthCheck         = () => request(`${BASE}/health`);
+export const loginAdmin          = (body) => request(`${BASE}/auth/admin/login`, { method: 'POST', body: JSON.stringify(body) });
+export const listAdminUsers      = (adminAccessToken) => request(`${BASE}/auth/admins`, {
+  method: 'GET',
+  headers: createAdminAuthHeaders(adminAccessToken),
+});
+export const addAdminUser        = (body, adminAccessToken) => request(`${BASE}/auth/admins`, {
+  method: 'POST',
+  headers: createAdminAuthHeaders(adminAccessToken),
+  body: JSON.stringify(body),
+});
 
 // ----- Python AI -------------------------------------------------------------
 export const aiQuickRiskAssess   = (body) => request(`${AI}/quick-risk-assess`, { method: 'POST', body: JSON.stringify(body) });
