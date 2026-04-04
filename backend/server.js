@@ -15,6 +15,7 @@ const mongoose = require('mongoose');
 
 const { connectToDatabase } = require('./config/databaseConfig');
 const { startWeatherMonitoring, runWeatherMonitoringCycle } = require('./services/weatherMonitoringService');
+const { authenticateRequestToken, requireAdminRole } = require('./middleware/authMiddleware');
 const deliveryPartnerRouter = require('./routes/deliveryPartnerRoutes');
 const insurancePolicyRouter = require('./routes/insurancePolicyRoutes');
 const insuranceClaimRouter  = require('./routes/insuranceClaimRoutes');
@@ -92,7 +93,7 @@ expressApplication.use('/api/auth',               authRouter);
  * Manually triggers one weather monitoring cycle across all cities.
  * Useful for demos and testing without waiting 30 minutes.
  */
-expressApplication.post('/api/admin/trigger-weather-check', async (req, res) => {
+expressApplication.post('/api/admin/trigger-weather-check', authenticateRequestToken, requireAdminRole, async (req, res) => {
   try {
     const result = await runWeatherMonitoringCycle();
     return res.status(200).json({ success: true, ...result });

@@ -13,6 +13,7 @@
 
 const express = require('express');
 const InsuranceClaim = require('../models/InsuranceClaim');
+const { authenticateRequestToken, requireAdminRole } = require('../middleware/authMiddleware');
 const { validateIncomingRequest } = require('../middleware/validationMiddleware');
 const {
   submitClaimValidators,
@@ -108,7 +109,7 @@ insuranceClaimRouter.post(
  * Returns all claims currently flagged for manual human review.
  * Intended for use by admin/operations dashboards.
  */
-insuranceClaimRouter.get('/flagged', async (request, response) => {
+insuranceClaimRouter.get('/flagged', authenticateRequestToken, requireAdminRole, async (request, response) => {
   try {
     const { page = 1, limit = 20 } = request.query;
 
@@ -262,6 +263,8 @@ insuranceClaimRouter.get(
  */
 insuranceClaimRouter.patch(
   '/:claimId/review',
+  authenticateRequestToken,
+  requireAdminRole,
   claimIdParamValidators,
   validateIncomingRequest,
   async (request, response) => {

@@ -63,18 +63,36 @@ export const cancelPolicy             = (id)        => request(`${BASE}/insuranc
 export const submitClaim          = (body)          => request(`${BASE}/insurance-claims/submit`,                 { method: 'POST', body: JSON.stringify(body) });
 export const getClaim             = (id)            => request(`${BASE}/insurance-claims/${id}`);
 export const getPartnerClaims     = (partnerId, p)  => request(`${BASE}/insurance-claims/partner/${partnerId}?${new URLSearchParams(p || {})}`);
-export const getFlaggedClaims     = (p)             => request(`${BASE}/insurance-claims/flagged?${new URLSearchParams(p || {})}`);
-export const reviewClaim          = (id, body)      => request(`${BASE}/insurance-claims/${id}/review`,           { method: 'PATCH', body: JSON.stringify(body) });
+export const getFlaggedClaims     = (p, adminAccessToken) => request(`${BASE}/insurance-claims/flagged?${new URLSearchParams(p || {})}`, {
+  method: 'GET',
+  headers: createAdminAuthHeaders(adminAccessToken),
+});
+export const reviewClaim          = (id, body, adminAccessToken)      => request(`${BASE}/insurance-claims/${id}/review`,           {
+  method: 'PATCH',
+  headers: createAdminAuthHeaders(adminAccessToken),
+  body: JSON.stringify(body),
+});
 
 // ----- Disruption Events -----------------------------------------------------
-export const createDisruptionEvent      = (body)    => request(`${BASE}/disruption-events`,                            { method: 'POST', body: JSON.stringify(body) });
+export const createDisruptionEvent      = (body, adminAccessToken)    => request(`${BASE}/disruption-events`,                            {
+  method: 'POST',
+  headers: createAdminAuthHeaders(adminAccessToken),
+  body: JSON.stringify(body),
+});
 export const listDisruptionEvents       = (p)       => request(`${BASE}/disruption-events?${new URLSearchParams(p || {})}`);
 export const getDisruptionEvent         = (id)      => request(`${BASE}/disruption-events/${id}`);
 export const checkThreshold             = (body)    => request(`${BASE}/disruption-events/check-threshold`,            { method: 'POST', body: JSON.stringify(body) });
-export const triggerClaimsForEvent      = (id, body)=> request(`${BASE}/disruption-events/${id}/trigger-claims`,       { method: 'POST', body: JSON.stringify(body) });
+export const triggerClaimsForEvent      = (id, body, adminAccessToken)=> request(`${BASE}/disruption-events/${id}/trigger-claims`,       {
+  method: 'POST',
+  headers: createAdminAuthHeaders(adminAccessToken),
+  body: JSON.stringify(body),
+});
 
 // ----- Admin -----------------------------------------------------------------
-export const triggerWeatherCheck = () => request(`${BASE}/admin/trigger-weather-check`, { method: 'POST' });
+export const triggerWeatherCheck = (adminAccessToken) => request(`${BASE}/admin/trigger-weather-check`, {
+  method: 'POST',
+  headers: createAdminAuthHeaders(adminAccessToken),
+});
 export const healthCheck         = () => request(`${BASE}/health`);
 export const loginAdmin          = (body) => request(`${BASE}/auth/admin/login`, { method: 'POST', body: JSON.stringify(body) });
 export const listAdminUsers      = (adminAccessToken) => request(`${BASE}/auth/admins`, {

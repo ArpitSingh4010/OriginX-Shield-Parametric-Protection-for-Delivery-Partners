@@ -13,6 +13,7 @@
 
 const express = require('express');
 const mongoose = require('mongoose');
+const { authenticateRequestToken, requireAdminRole } = require('../middleware/authMiddleware');
 
 const DisruptionEvent = require('../models/DisruptionEvent');
 const DeliveryPartner = require('../models/DeliveryPartner');
@@ -38,7 +39,7 @@ const disruptionEventRouter = express.Router();
  * The body should include the event type, affected city, zone coordinates,
  * radius, and the measured environmental values.
  */
-disruptionEventRouter.post('/', async (request, response) => {
+disruptionEventRouter.post('/', authenticateRequestToken, requireAdminRole, async (request, response) => {
   try {
     const {
       disruptionType,
@@ -278,7 +279,7 @@ disruptionEventRouter.get('/:eventId', async (request, response) => {
  *   - minutesActiveOnDeliveryPlatform
  *   - currentEnvironmentalConditions (the sensor readings that triggered the event)
  */
-disruptionEventRouter.post('/:eventId/trigger-claims', async (request, response) => {
+disruptionEventRouter.post('/:eventId/trigger-claims', authenticateRequestToken, requireAdminRole, async (request, response) => {
   try {
     const { eventId } = request.params;
 

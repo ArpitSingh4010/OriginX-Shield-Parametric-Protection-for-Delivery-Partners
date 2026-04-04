@@ -64,7 +64,7 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
     setLoading(true);
     try {
       const [f, e, p, adminList] = await Promise.all([
-        getFlaggedClaims({ limit: 50 }),
+        getFlaggedClaims({ limit: 50 }, adminAccessToken),
         listDisruptionEvents({ limit: 30 }),
         listPartners({ limit: 100 }),
         listAdminUsers(adminAccessToken),
@@ -82,7 +82,7 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
   const handleReview = async (claimId, decision) => {
     setReviewing(r => ({ ...r, [claimId]: true }));
     try {
-      await reviewClaim(claimId, { decision, reviewerNotes: note[claimId] || '' });
+      await reviewClaim(claimId, { decision, reviewerNotes: note[claimId] || '' }, adminAccessToken);
       showToast(`Claim ${decision === 'approve' ? 'approved ' : 'rejected '}`);
       setFlagged(f => f.filter(c => c._id !== claimId));
     } catch (e) { showToast('Review failed: ' + e.message); }
@@ -92,7 +92,7 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
   const handleWeatherCheck = async () => {
     setWeatherLoading(true); setWeatherResult(null);
     try {
-      const r = await triggerWeatherCheck();
+      const r = await triggerWeatherCheck(adminAccessToken);
       setWeatherResult(r);
       showToast(`Weather check done  ${r.totalEventsCreated} new event(s) created`);
       loadData();
@@ -114,7 +114,7 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
       await createDisruptionEvent({
         ...newEvent,
         disruptionStartTimestamp: new Date().toISOString(),
-      });
+      }, adminAccessToken);
       showToast('Disruption event created ');
       loadData();
     } catch (e) { showToast('Failed: ' + e.message); }
@@ -132,7 +132,7 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
           airQualityIndex: Number(event.measuredAirQualityIndex || 0),
           lpgShortageSeverityIndex: Number(event.measuredLpgShortageSeverityIndex || 0),
         },
-      });
+      }, adminAccessToken);
       showToast('Auto-claim trigger completed for event.');
       loadData();
     } catch (error) {
