@@ -2,9 +2,102 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   getFlaggedClaims, reviewClaim, listDisruptionEvents,
   triggerWeatherCheck, createDisruptionEvent, listPartners, triggerClaimsForEvent,
-  addAdminUser, listAdminUsers, removePartner,
+  addAdminUser, listAdminUsers, removePartner, getAdminStats, getAiModelInfo, seedDemoData,
 } from '../api/rakshaRideApi';
 import StatusBadge from '../components/StatusBadge';
+
+function StatLogo({ type = 'claims' }) {
+  const iconByType = {
+    claims: (
+      <path d="M5 6h14M5 10h10M5 14h8M15 14l2 2 4-4" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    ),
+    events: (
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M6.5 6.5l2.2 2.2M15.3 15.3l2.2 2.2M17.5 6.5l-2.2 2.2M8.7 15.3l-2.2 2.2M12 8a4 4 0 100 8 4 4 0 000-8z" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+    ),
+    partners: (
+      <path d="M8 10a3 3 0 110-6 3 3 0 010 6zm8 1a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM3.5 18a4.5 4.5 0 019 0M13.5 18a3.5 3.5 0 017 0" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" />
+    ),
+    verified: (
+      <path d="M12 3l7 3v5c0 4.2-2.8 7.1-7 8-4.2-.9-7-3.8-7-8V6l7-3zm-3.2 8.5l2.2 2.2 4.2-4.2" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    ),
+  };
+
+  return (
+    <div style={{
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      background: 'rgba(255,255,255,0.12)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#fff',
+    }}>
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+        {iconByType[type] || iconByType.claims}
+      </svg>
+    </div>
+  );
+}
+
+function MiniBarChart({ data = [], valueKey = 'value', labelKey = 'label', barColor = '#f59e0b' }) {
+  const maxValue = Math.max(1, ...data.map((entry) => Number(entry[valueKey] || 0)));
+
+  return (
+    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', minHeight: 140 }}>
+      {data.map((entry) => {
+        const height = Math.max(8, (Number(entry[valueKey] || 0) / maxValue) * 110);
+        return (
+          <div key={entry[labelKey]} style={{ flex: 1, textAlign: 'center' }}>
+            <div
+              style={{
+                height,
+                background: barColor,
+                borderRadius: '8px 8px 4px 4px',
+                marginBottom: '0.3rem',
+              }}
+              title={`${entry[labelKey]}: ${entry[valueKey]}`}
+            />
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{entry[labelKey]}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DonutMetric({ label, value = 0, max = 100, color = '#10b981' }) {
+  const radius = 26;
+  const circumference = 2 * Math.PI * radius;
+  const ratio = max > 0 ? Math.min(1, value / max) : 0;
+  const strokeDash = ratio * circumference;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+      <svg width={72} height={72} viewBox="0 0 72 72">
+        <circle cx={36} cy={36} r={radius} stroke="rgba(255,255,255,0.15)" strokeWidth={8} fill="none" />
+        <circle
+          cx={36}
+          cy={36}
+          r={radius}
+          stroke={color}
+          strokeWidth={8}
+          fill="none"
+          strokeDasharray={`${strokeDash} ${circumference}`}
+          transform="rotate(-90 36 36)"
+          strokeLinecap="round"
+        />
+        <text x={36} y={40} textAnchor="middle" fill="#fff" style={{ fontSize: 11, fontWeight: 700 }}>
+          {Math.round(ratio * 100)}%
+        </text>
+      </svg>
+      <div>
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem' }}>{label}</div>
+        <div style={{ fontWeight: 700 }}>{value}</div>
+      </div>
+    </div>
+  );
+}
 
 export default function Admin({ adminAccessToken, adminProfile, onAdminLogout }) {
   const DISRUPTION_TYPE_OPTIONS = [
@@ -34,10 +127,13 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
   const [toast,     setToast]     = useState('');
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherResult,  setWeatherResult]  = useState(null);
+  const [adminStats, setAdminStats] = useState(null);
+  const [modelInfo, setModelInfo] = useState(null);
   const [adminUsers, setAdminUsers] = useState([]);
   const [newAdmin, setNewAdmin] = useState({ fullName: '', emailAddress: '', password: '' });
   const [creatingAdmin, setCreatingAdmin] = useState(false);
   const [removingPartnerId, setRemovingPartnerId] = useState('');
+  const [seedingDemo, setSeedingDemo] = useState(false);
 
   const isAuthSessionError = (message = '') => {
     const normalized = String(message).toLowerCase();
@@ -74,6 +170,10 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
     Kolkata:   { latitude: 22.5726, longitude: 88.3639 },
     Pune:      { latitude: 18.5204, longitude: 73.8567 },
     Ahmedabad: { latitude: 23.0225, longitude: 72.5714 },
+    Jaipur:    { latitude: 26.9124, longitude: 75.7873 },
+    Lucknow:   { latitude: 26.8467, longitude: 80.9462 },
+    Surat:     { latitude: 21.1702, longitude: 72.8311 },
+    Indore:    { latitude: 22.7196, longitude: 75.8577 },
   };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
@@ -86,6 +186,10 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
         listDisruptionEvents({ limit: 30 }),
         listPartners({ limit: 100 }),
         listAdminUsers(adminAccessToken),
+      ]);
+      const [statsResponse, modelResponse] = await Promise.allSettled([
+        getAdminStats(adminAccessToken),
+        getAiModelInfo(),
       ]);
 
       if (f.status === 'fulfilled') {
@@ -100,8 +204,14 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
       if (adminList.status === 'fulfilled') {
         setAdminUsers(adminList.value.adminUsers || []);
       }
+      if (statsResponse.status === 'fulfilled') {
+        setAdminStats(statsResponse.value.stats || null);
+      }
+      if (modelResponse.status === 'fulfilled') {
+        setModelInfo(modelResponse.value || null);
+      }
 
-      const failedResponses = [f, e, p, adminList].filter((response) => response.status === 'rejected');
+      const failedResponses = [f, e, p, adminList, statsResponse, modelResponse].filter((response) => response.status === 'rejected');
       if (failedResponses.length > 0) {
         const combinedErrorMessage = failedResponses
           .map((response) => response.reason?.message)
@@ -265,6 +375,24 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
     }
   };
 
+  const handleSeedDemoFlow = async () => {
+    setSeedingDemo(true);
+    try {
+      const response = await seedDemoData({ city: newEvent.affectedCityName }, adminAccessToken);
+      const demoInfo = response?.demo || {};
+      showToast(`Demo seeded: partner ${demoInfo.partnerId}, claim ${demoInfo.claimId}`);
+      await loadData();
+    } catch (error) {
+      if (isAuthSessionError(error.message)) {
+        handleSessionExpiry(error.message);
+        return;
+      }
+      showToast(`Demo seeding failed: ${error.message}`);
+    } finally {
+      setSeedingDemo(false);
+    }
+  };
+
   const handleRemovePartner = async (partnerId) => {
     const targetPartner = partners.find((partner) => partner._id === partnerId);
     const partnerLabel = targetPartner?.fullName || targetPartner?.emailAddress || 'this partner';
@@ -290,10 +418,10 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
     }
   };
   const stats = [
-    { icon: '🚩', cls: 'stat-icon-indigo', label: 'Flagged Claims',   value: flagged.length },
-    { icon: '⚠️', cls: 'stat-icon-amber',  label: 'Active Events',    value: events.filter(e => !e.hasAutomaticClaimTriggerBeenFired).length },
-    { icon: '👥', cls: 'stat-icon-sky',    label: 'Total Partners',   value: partners.length },
-    { icon: '✅', cls: 'stat-icon-emerald',label: 'Verified Partners', value: partners.filter(p => p.isAccountVerified).length },
+    { icon: <StatLogo type="claims" />, cls: 'stat-icon-indigo', label: 'Flagged Claims',   value: flagged.length },
+    { icon: <StatLogo type="events" />, cls: 'stat-icon-amber',  label: 'Active Events',    value: events.filter(e => !e.hasAutomaticClaimTriggerBeenFired).length },
+    { icon: <StatLogo type="partners" />, cls: 'stat-icon-sky',    label: 'Total Partners',   value: partners.length },
+    { icon: <StatLogo type="verified" />, cls: 'stat-icon-emerald',label: 'Verified Partners', value: partners.filter(p => p.isAccountVerified).length },
   ];
 
   const TABS = [
@@ -350,6 +478,69 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
             </div>
           ))}
         </div>
+
+        {adminStats && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div className="card">
+              <div style={{ fontWeight: 700, marginBottom: '0.8rem' }}>Weekly Payout Trend</div>
+              <MiniBarChart
+                data={adminStats.weeklyPayoutTrend || []}
+                valueKey="payout"
+                labelKey="label"
+                barColor="#10b981"
+              />
+            </div>
+
+            <div className="card">
+              <div style={{ fontWeight: 700, marginBottom: '0.8rem' }}>Claims by Status</div>
+              <MiniBarChart
+                data={Object.entries(adminStats.claimsByStatus || {}).map(([label, value]) => ({
+                  label: label.replace(/_/g, ' '),
+                  value,
+                }))}
+                valueKey="value"
+                labelKey="label"
+                barColor="#38bdf8"
+              />
+            </div>
+
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+              <div style={{ fontWeight: 700 }}>Risk & Revenue Snapshot</div>
+              <DonutMetric
+                label="Flagged Claims"
+                value={adminStats.flaggedClaimsCount}
+                max={Math.max(1, adminStats.totalClaims)}
+                color="#f59e0b"
+              />
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                Estimated weekly earnings: {formatInr(adminStats.earningsVsPayout?.estimatedWeeklyPartnerEarnings || 0)}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                Total payout issued: {formatInr(adminStats.earningsVsPayout?.totalPayoutIssued || 0)}
+              </div>
+              <button className="btn btn-primary" onClick={handleSeedDemoFlow} disabled={seedingDemo}>
+                {seedingDemo ? 'Seeding Demo...' : 'One-Click Demo Seeder'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {modelInfo?.modelMetadata && (
+          <div className="card" style={{ marginBottom: '1.5rem' }}>
+            <div style={{ fontWeight: 700, marginBottom: '0.65rem' }}>Fraud Model Info</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.5rem' }}>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                Service: <strong style={{ color: 'var(--text-primary)' }}>RakshaRide AI</strong>
+              </div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                Trained At: <strong style={{ color: 'var(--text-primary)' }}>{modelInfo.modelMetadata.trained_at || 'n/a'}</strong>
+              </div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                Fraud Accuracy: <strong style={{ color: 'var(--text-primary)' }}>{modelInfo.modelMetadata.fraud_classifier_accuracy || 'n/a'}</strong>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0' }}>
@@ -577,7 +768,7 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
                 (LPG shortage, curfew, flooding) can be created from the Events tab.
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem' }}>
-                {['Chennai','Mumbai','Delhi','Bengaluru','Hyderabad','Kolkata','Pune','Ahmedabad'].map(c => (
+                {Object.keys(CITY_COORDS).map(c => (
                   <span key={c} className="badge badge-info"><span className="badge-dot" />{c}</span>
                 ))}
               </div>

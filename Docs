@@ -139,4 +139,162 @@ Security guidance:
 - Do not commit credentials to repository
 - Configure CI with secret variables and minimal scope tokens
 
+8) Feature Additions (April 2026)
+
+This section documents the newly implemented product enhancements across Partner Dashboard, Admin Panel, and backend platform services.
+
+8.1 High-Impact Features
+
+A) Policy Renewal Flow (Dashboard)
+- Problem addressed: no guided path when weekly policy expires.
+- What was added:
+  - Renewal CTA and plan picker (`basic`, `standard`, `premium`) in Dashboard when policy is missing/expired.
+  - In-place renew call using existing `POST /api/insurance-policies/subscribe` flow.
+- Frontend file:
+  - `frontend/src/pages/Dashboard.jsx`
+
+B) Disruption Map (Dashboard)
+- Problem addressed: no visual map for disruption + partner location.
+- What was added:
+  - New `DisruptionMap` component to render event markers and partner marker on an India-bounds coordinate canvas.
+- Frontend files:
+  - `frontend/src/components/DisruptionMap.jsx`
+  - `frontend/src/pages/Dashboard.jsx`
+
+C) Real-Time Alerts (Backend SSE + Frontend Toast)
+- Problem addressed: partner got no immediate notification when auto-claim is processed.
+- What was added:
+  - SSE alert stream service for partner-scoped live notifications.
+  - New endpoint: `GET /api/alerts/stream?partnerId=<id>`
+  - Auto-payout event push from claim processing service when payout is processed.
+  - Dashboard subscribes via EventSource and shows live toasts.
+- Backend files:
+  - `backend/services/alertStreamService.js`
+  - `backend/server.js`
+  - `backend/services/claimProcessingService.js`
+- Frontend files:
+  - `frontend/src/api/rakshaRideApi.js`
+  - `frontend/src/pages/Dashboard.jsx`
+
+D) One-Click Demo Seeder (Admin)
+- Problem addressed: no instant end-to-end demo flow for judges.
+- What was added:
+  - Admin endpoint to seed partner + policy + event + triggered claim.
+  - New endpoint: `POST /api/admin/seed-demo`
+  - Admin UI action button to call seeder and refresh data.
+- Backend file:
+  - `backend/server.js`
+- Frontend files:
+  - `frontend/src/api/rakshaRideApi.js`
+  - `frontend/src/pages/Admin.jsx`
+
+E) Claim Confidence Explanation (Dashboard)
+- Problem addressed: anomaly notes existed but were not visible in UI.
+- What was added:
+  - Claim verification/fraud notes now persisted for both auto-approved and flagged claims.
+  - Dashboard table now parses and displays compact anomaly/confidence notes.
+- Backend file:
+  - `backend/services/claimProcessingService.js`
+- Frontend file:
+  - `frontend/src/pages/Dashboard.jsx`
+
+8.2 Medium-Impact Features
+
+A) Admin Analytics Charts
+- What was added:
+  - Mini chart components for weekly payout trend and claims-by-status.
+  - Risk/revenue snapshot card (flagged ratio + earnings vs payout).
+- Frontend file:
+  - `frontend/src/pages/Admin.jsx`
+
+B) Admin Stats Aggregation Endpoint
+- What was added:
+  - New endpoint: `GET /api/admin/stats`
+  - Aggregates:
+    - total partners / verified partners
+    - total claims / total events
+    - claims grouped by status
+    - total payouts processed
+    - flagged claim count and fraud rate
+    - weekly payout trend
+    - earnings vs payout summary
+- Backend file:
+  - `backend/server.js`
+
+C) Earnings/Income Chart Data
+- What was added:
+  - Earnings vs payout values included in `admin/stats` payload and displayed in Admin analytics card.
+- Files:
+  - `backend/server.js`
+  - `frontend/src/pages/Admin.jsx`
+
+D) Claim Timeline Stepper
+- What was added:
+  - New reusable `ClaimTimeline` visual stepper:
+    - Filed -> Under Review -> Approved -> Paid
+  - Replaces plain status badge in Dashboard claim history.
+- Files:
+  - `frontend/src/components/ClaimTimeline.jsx`
+  - `frontend/src/pages/Dashboard.jsx`
+
+8.3 Quick-Win Features
+
+A) Model Info Card (Admin)
+- What was added:
+  - Frontend fetches AI model metadata from `/model-info` and displays training metadata and fraud model metrics.
+- Files:
+  - `frontend/src/api/rakshaRideApi.js`
+  - `frontend/src/pages/Admin.jsx`
+
+B) Expanded City Presets
+- What was added:
+  - Added more city presets across monitor/risk maps/admin forms:
+    - Jaipur, Lucknow, Surat, Indore
+- Files:
+  - `backend/services/weatherMonitoringService.js`
+  - `backend/services/aiIntegrationService.js`
+  - `frontend/src/pages/Admin.jsx`
+  - `frontend/src/pages/Dashboard.jsx`
+
+C) Payout Receipt Modal State
+- What was added:
+  - `PayoutModal` supports explicit `celebration` and `receipt` views.
+  - Receipt view supports print/download action.
+- File:
+  - `frontend/src/components/PayoutModal.jsx`
+
+D) React ErrorBoundary
+- What was added:
+  - Global UI error boundary wrapper to prevent full app crash in demo.
+- Files:
+  - `frontend/src/components/ErrorBoundary.jsx`
+  - `frontend/src/main.jsx`
+
+E) Stat Card Logos for Previously Empty Icon Blocks
+- What was added:
+  - Dashboard and Admin stat cards now include visible SVG mini-logos in icon blocks.
+  - Icons are metric-specific (claims, events, partners, verification, approvals, coverage, expiry).
+- Files:
+  - `frontend/src/pages/Admin.jsx`
+  - `frontend/src/pages/Dashboard.jsx`
+
+8.4 New/Updated Endpoints Summary
+
+- `GET /api/alerts/stream?partnerId=<id>`
+  - Server-Sent Events stream for partner notifications.
+
+- `GET /api/admin/stats`
+  - Admin aggregate metrics for analytics widgets/charts.
+
+- `POST /api/admin/seed-demo`
+  - Seeds ready-to-demo scenario with partner/policy/event/claim.
+
+8.5 Notes for Demo Readiness
+
+- Frontend and backend build/test checks should pass before demos:
+  - Frontend: `npm run build`
+  - Backend: `npm test`
+
+- Weather API failures do not block core demo flow if keys are invalid; use `seed-demo` for deterministic demo path.
+
 

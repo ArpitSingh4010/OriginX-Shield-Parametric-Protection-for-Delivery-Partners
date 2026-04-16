@@ -245,11 +245,11 @@ export default function Landing() {
                 against location consistency, delivery platform activity, and claim frequency
                 patterns before any payout is approved.
               </p>
-                {[
-                ['📍', 'Location cross-validation', 'GPS vs. network signal (Haversine distance)'],
-                ['📱', 'Platform activity check', 'Minimum 30 min active on delivery app'],
-                ['🧾', 'Claim frequency analysis', 'Max 3 auto-approvals per week'],
-                ['🤖', 'AI anomaly scoring', 'Python ML model flags unusual patterns'],
+              {[
+                ['', 'Location cross-validation', 'GPS vs. network signal (Haversine distance)'],
+                ['', 'Platform activity check', 'Minimum 30 min active on delivery app'],
+                ['', 'Claim frequency analysis', 'Max 3 auto-approvals per week'],
+                ['', 'ML ensemble scoring', 'GradientBoosting + rule hybrid (activity, location, frequency)'],
               ].map(([icon, title, desc]) => (
                 <div key={title} style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
                   <div style={{

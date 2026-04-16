@@ -6,6 +6,13 @@
 const BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 const AI   = import.meta.env.VITE_AI_BASE_URL  || '/ai';
 
+function buildApiUrl(path) {
+  if (/^https?:\/\//i.test(BASE)) {
+    return `${BASE}${path}`;
+  }
+  return `${BASE}${path}`;
+}
+
 async function request(url, options = {}) {
   try {
     const res = await fetch(url, {
@@ -112,6 +119,15 @@ export const triggerWeatherCheck = (adminAccessToken) => request(`${BASE}/admin/
   method: 'POST',
   headers: createAdminAuthHeaders(adminAccessToken),
 });
+export const getAdminStats = (adminAccessToken) => request(`${BASE}/admin/stats`, {
+  method: 'GET',
+  headers: createAdminAuthHeaders(adminAccessToken),
+});
+export const seedDemoData = (body, adminAccessToken) => request(`${BASE}/admin/seed-demo`, {
+  method: 'POST',
+  headers: createAdminAuthHeaders(adminAccessToken),
+  body: JSON.stringify(body || {}),
+});
 export const healthCheck         = () => request(`${BASE}/health`);
 export const loginAdmin          = (body) => request(`${BASE}/auth/admin/login`, { method: 'POST', body: JSON.stringify(body) });
 export const listAdminUsers      = (adminAccessToken) => request(`${BASE}/auth/admins`, {
@@ -128,4 +144,10 @@ export const addAdminUser        = (body, adminAccessToken) => request(`${BASE}/
 export const aiQuickRiskAssess   = (body) => request(`${AI}/quick-risk-assess`, { method: 'POST', body: JSON.stringify(body) });
 export const aiAssessRisk        = (body) => request(`${AI}/assess-risk`,       { method: 'POST', body: JSON.stringify(body) });
 export const aiDetectAnomaly     = (body) => request(`${AI}/detect-anomaly`,    { method: 'POST', body: JSON.stringify(body) });
+export const getAiModelInfo      = () => request(`${AI}/model-info`,            { method: 'GET' });
+
+export function createPartnerAlertStream(partnerId) {
+  const streamUrl = new URL(buildApiUrl(`/alerts/stream?partnerId=${encodeURIComponent(partnerId)}`), window.location.origin);
+  return new EventSource(streamUrl.toString());
+}
 

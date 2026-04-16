@@ -27,6 +27,10 @@ const MONITORED_INDIAN_CITIES = [
   { name: 'Kolkata',    latitude: 22.5726, longitude: 88.3639 },
   { name: 'Pune',       latitude: 18.5204, longitude: 73.8567 },
   { name: 'Ahmedabad',  latitude: 23.0225, longitude: 72.5714 },
+  { name: 'Jaipur',     latitude: 26.9124, longitude: 75.7873 },
+  { name: 'Lucknow',    latitude: 26.8467, longitude: 80.9462 },
+  { name: 'Surat',      latitude: 21.1702, longitude: 72.8311 },
+  { name: 'Indore',     latitude: 22.7196, longitude: 75.8577 },
 ];
 
 const WEATHER_MONITOR_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes

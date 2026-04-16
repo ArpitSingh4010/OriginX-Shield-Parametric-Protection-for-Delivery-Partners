@@ -1,7 +1,51 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { getPartner, getPartnerClaims, submitClaim, listDisruptionEvents } from '../api/rakshaRideApi';
+import {
+  getPartner,
+  getPartnerClaims,
+  submitClaim,
+  listDisruptionEvents,
+  subscribePolicy,
+  createPartnerAlertStream,
+} from '../api/rakshaRideApi';
 import StatusBadge from '../components/StatusBadge';
+import PayoutModal from '../components/PayoutModal';
+import DisruptionMap from '../components/DisruptionMap';
+import ClaimTimeline from '../components/ClaimTimeline';
+
+function StatLogo({ type = 'claims' }) {
+  const iconByType = {
+    claims: (
+      <path d="M5 6h14M5 10h10M5 14h8M15 14l2 2 4-4" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    ),
+    approved: (
+      <path d="M12 3l7 3v5c0 4.2-2.8 7.1-7 8-4.2-.9-7-3.8-7-8V6l7-3zm-3.2 8.5l2.2 2.2 4.2-4.2" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    ),
+    coverage: (
+      <path d="M4 12a8 8 0 0116 0M12 12l3-3M12 12v4" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    ),
+    expiry: (
+      <path d="M7 3v3M17 3v3M4 8h16M6 5h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2zm4 7h2v4h-2zm4 0h2v4h-2z" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+    ),
+  };
+
+  return (
+    <div style={{
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      background: 'rgba(255,255,255,0.12)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#fff',
+    }}>
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+        {iconByType[type] || iconByType.claims}
+      </svg>
+    </div>
+  );
+}
 
 function ProgressBar({ value, max, color = 'amber' }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
@@ -15,6 +59,139 @@ function ProgressBar({ value, max, color = 'amber' }) {
 const formatInr = (amount) => `₹${Number(amount || 0).toLocaleString('en-IN')}`;
 const humanizeDisruptionType = (type = '') => String(type || '').replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 
+function extractClaimConfidenceNotes(claimItem) {
+  const rawNotes = String(claimItem?.fraudReviewNotes || '').trim();
+  if (!rawNotes) {
+    return [];
+  }
+
+  try {
+    const parsedNotes = JSON.parse(rawNotes);
+    const anomalyNotes = parsedNotes?.aiAnomalyAssessment?.anomalyDetectionNotes;
+    if (Array.isArray(anomalyNotes) && anomalyNotes.length > 0) {
+      return anomalyNotes;
+    }
+
+    const plainNotes = [];
+    if (parsedNotes.isLocationConsistent === false) {
+      plainNotes.push('GPS/network location mismatch detected.');
+    }
+    if (parsedNotes.wasPartnerActiveOnPlatform === false) {
+      plainNotes.push('Insufficient delivery activity during disruption window.');
+    }
+    if (parsedNotes.hasExceededWeeklyClaimLimit) {
+      plainNotes.push('Weekly claim frequency is above normal threshold.');
+    }
+
+    return plainNotes;
+  } catch {
+    return [rawNotes];
+  }
+}
+
+// ── SVG Donut chart for coverage ring ──────────────────────────────────────────
+function CoverageDonut({ used = 0, max = 1 }) {
+  const R = 48;
+  const C = 2 * Math.PI * R;
+  const pct = max > 0 ? Math.min(used / max, 1) : 0;
+  const remainPct = 1 - pct;
+  const usedDash = pct * C;
+  const remainDash = remainPct * C;
+  const usedColor = pct > 0.8 ? '#ef4444' : pct > 0.5 ? '#f59e0b' : '#10b981';
+
+  return (
+    <svg width={120} height={120} viewBox="0 0 120 120">
+      <circle cx={60} cy={60} r={R} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={14} />
+      {/* Remaining (silver) */}
+      <circle
+        cx={60} cy={60} r={R} fill="none"
+        stroke="rgba(255,255,255,0.12)" strokeWidth={14}
+        strokeDasharray={`${remainDash} ${C}`}
+        strokeDashoffset={-usedDash}
+        strokeLinecap="round"
+        transform="rotate(-90 60 60)"
+      />
+      {/* Used */}
+      <circle
+        cx={60} cy={60} r={R} fill="none"
+        stroke={usedColor} strokeWidth={14}
+        strokeDasharray={`${usedDash} ${C}`}
+        strokeLinecap="round"
+        transform="rotate(-90 60 60)"
+        style={{ transition: 'stroke-dasharray 0.8s ease' }}
+      />
+      <text x={60} y={56} textAnchor="middle" style={{ fill: '#fff', fontSize: 13, fontWeight: 900 }}>
+        {Math.round(pct * 100)}%
+      </text>
+      <text x={60} y={72} textAnchor="middle" style={{ fill: 'rgba(255,255,255,0.4)', fontSize: 9 }}>
+        used
+      </text>
+    </svg>
+  );
+}
+
+// ── SVG sparkline of payouts ───────────────────────────────────────────────────
+function PayoutSparkline({ claims = [] }) {
+  const approved = claims
+    .filter(c => ['approved_for_payout', 'payout_processed'].includes(c.currentClaimStatus))
+    .slice(-8);
+
+  if (approved.length === 0) {
+    return <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center', padding: '1rem 0' }}>No payouts yet</div>;
+  }
+
+  const amounts = approved.map(c => c.approvedPayoutAmountInRupees || 0);
+  const maxAmt = Math.max(...amounts, 1);
+  const W = 240, H = 60, pad = 8;
+  const pts = amounts.map((a, i) => {
+    const x = pad + (i / Math.max(amounts.length - 1, 1)) * (W - pad * 2);
+    const y = H - pad - (a / maxAmt) * (H - pad * 2);
+    return `${x},${y}`;
+  });
+  const polyline = pts.join(' ');
+  const area = `M${pts[0]} L${pts.join(' L')} L${pad + (W - pad * 2)},${H} L${pad},${H} Z`;
+
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', width: '100%' }}>
+      <defs>
+        <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#sparkGrad)" />
+      <polyline points={polyline} fill="none" stroke="#10b981" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      {amounts.map((a, i) => {
+        const [x, y] = pts[i].split(',').map(Number);
+        return <circle key={i} cx={x} cy={y} r={3} fill="#10b981" />;
+      })}
+    </svg>
+  );
+}
+
+// ── Pulsing coverage status dot ────────────────────────────────────────────────
+function CoverageStatusDot({ policy }) {
+  if (!policy) return <span style={{ color: 'var(--red)', fontWeight: 700 }}>No Active Policy</span>;
+  const daysLeft = Math.ceil((new Date(policy.policyEndDate) - new Date()) / 86400000);
+  if (daysLeft <= 0) return <span style={{ color: 'var(--red)', fontWeight: 700 }}>Expired</span>;
+  const color = daysLeft <= 3 ? '#f59e0b' : '#10b981';
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+      <span style={{
+        width: 10, height: 10, borderRadius: '50%', background: color,
+        boxShadow: `0 0 0 0 ${color}`,
+        animation: 'pulseDot 2s infinite',
+        display: 'inline-block',
+      }} />
+      <span style={{ color, fontWeight: 700 }}>
+        {daysLeft <= 3 ? `Expiring in ${daysLeft}d` : `Active — ${daysLeft}d left`}
+      </span>
+      <style>{`@keyframes pulseDot{0%{box-shadow:0 0 0 0 ${color}88}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}`}</style>
+    </span>
+  );
+}
+
+// ── Claim modal (unchanged logic) ──────────────────────────────────────────────
 function ClaimModal({ partner, policy, events, onClose, onSuccess }) {
   const DISRUPTION_TYPE_OPTIONS = [
     { value: 'heavy_rainfall', label: 'Heavy Rainfall' },
@@ -48,20 +225,13 @@ function ClaimModal({ partner, policy, events, onClose, onSuccess }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const filteredEvents = events.filter((eventItem) => {
-    if (!form.selectedDisruptionType) {
-      return true;
-    }
-
+    if (!form.selectedDisruptionType) return true;
     if (form.selectedDisruptionType === 'other') {
       const customTypeQuery = String(form.customDisruptionTypeLabel || '').trim().toLowerCase();
-      if (!customTypeQuery) {
-        return eventItem.disruptionType === 'other';
-      }
-
+      if (!customTypeQuery) return eventItem.disruptionType === 'other';
       return eventItem.disruptionType === 'other'
         && String(eventItem.customDisruptionTypeLabel || '').toLowerCase().includes(customTypeQuery);
     }
-
     return eventItem.disruptionType === form.selectedDisruptionType;
   });
 
@@ -70,8 +240,7 @@ function ClaimModal({ partner, policy, events, onClose, onSuccess }) {
     setError(''); setLoading(true);
     try {
       const coords = policy?.deliveryPartnerId?.primaryDeliveryZoneCoordinates ||
-        partner?.primaryDeliveryZoneCoordinates ||
-        { latitude: 13.08, longitude: 80.27 };
+        partner?.primaryDeliveryZoneCoordinates || { latitude: 13.08, longitude: 80.27 };
 
       const res = await submitClaim({
         deliveryPartnerId: partner._id || partner.partnerId,
@@ -110,23 +279,11 @@ function ClaimModal({ partner, policy, events, onClose, onSuccess }) {
 
           <div className="form-group">
             <label className="form-label">Disruption Type</label>
-            <select
-              className="form-select"
-              value={form.selectedDisruptionType}
-              onChange={e => {
-                const selectedType = e.target.value;
-                set('selectedDisruptionType', selectedType);
-                set('triggeringDisruptionEventId', '');
-                if (selectedType !== 'other') {
-                  set('customDisruptionTypeLabel', '');
-                }
-              }}
-            >
+            <select className="form-select" value={form.selectedDisruptionType}
+              onChange={e => { set('selectedDisruptionType', e.target.value); set('triggeringDisruptionEventId', ''); if (e.target.value !== 'other') set('customDisruptionTypeLabel', ''); }}>
               <option value="">All event types</option>
               {DISRUPTION_TYPE_OPTIONS.map((typeOption) => (
-                <option key={typeOption.value} value={typeOption.value}>
-                  {typeOption.label}
-                </option>
+                <option key={typeOption.value} value={typeOption.value}>{typeOption.label}</option>
               ))}
             </select>
           </div>
@@ -134,15 +291,8 @@ function ClaimModal({ partner, policy, events, onClose, onSuccess }) {
           {form.selectedDisruptionType === 'other' && (
             <div className="form-group">
               <label className="form-label">Other Type Name</label>
-              <input
-                className="form-input"
-                placeholder="Enter custom type (e.g. protest)"
-                value={form.customDisruptionTypeLabel}
-                onChange={e => {
-                  set('customDisruptionTypeLabel', e.target.value);
-                  set('triggeringDisruptionEventId', '');
-                }}
-              />
+              <input className="form-input" placeholder="Enter custom type (e.g. protest)" value={form.customDisruptionTypeLabel}
+                onChange={e => { set('customDisruptionTypeLabel', e.target.value); set('triggeringDisruptionEventId', ''); }} />
             </div>
           )}
 
@@ -160,11 +310,6 @@ function ClaimModal({ partner, policy, events, onClose, onSuccess }) {
                 </option>
               ))}
             </select>
-            {events.length > 0 && filteredEvents.length === 0 && (
-              <div className="form-hint" style={{ color: 'var(--text-muted)' }}>
-                No events match this type. Try another type or ask admin to create one.
-              </div>
-            )}
           </div>
 
           <div style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>Environmental Conditions</div>
@@ -217,6 +362,66 @@ function ClaimModal({ partner, policy, events, onClose, onSuccess }) {
   );
 }
 
+// ── City risk profile card ─────────────────────────────────────────────────────
+const CITY_FORECAST = {
+  Chennai:   { pct: 68, level: 'High',      color: '#ef4444', tip: 'Northeast monsoon season — high cyclone risk.' },
+  Mumbai:    { pct: 72, level: 'Very High',  color: '#dc2626', tip: 'Pre-monsoon heat & flooding expected.' },
+  Delhi:     { pct: 61, level: 'High',       color: '#ef4444', tip: 'Dust storms and extreme heat alerts likely.' },
+  Bengaluru: { pct: 35, level: 'Moderate',   color: '#f59e0b', tip: 'Intermittent rain — low disruption risk.' },
+  Hyderabad: { pct: 30, level: 'Low',        color: '#10b981', tip: 'Dry season. Minimal disruption expected.' },
+  Kolkata:   { pct: 58, level: 'Moderate',   color: '#f59e0b', tip: 'Pre-cyclone season advisory in effect.' },
+  Pune:      { pct: 25, level: 'Low',        color: '#10b981', tip: 'Clear conditions forecast next week.' },
+  Ahmedabad: { pct: 22, level: 'Low',        color: '#10b981', tip: 'Hot and dry — heat disruptions possible.' },
+  Jaipur:    { pct: 38, level: 'Moderate',   color: '#f59e0b', tip: 'Heat spikes likely in afternoon delivery windows.' },
+  Lucknow:   { pct: 42, level: 'Moderate',   color: '#f59e0b', tip: 'Patchy rain and humidity may affect trips.' },
+  Surat:     { pct: 45, level: 'Moderate',   color: '#f59e0b', tip: 'Coastal showers can cause short disruptions.' },
+  Indore:    { pct: 34, level: 'Low',        color: '#10b981', tip: 'Mostly stable weather expected this week.' },
+};
+
+function RiskProfileCard({ city = 'Chennai' }) {
+  const forecast = CITY_FORECAST[city] || CITY_FORECAST.Chennai;
+  return (
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>My City Risk Profile</div>
+        <span className="badge badge-info">{city}</span>
+      </div>
+
+      {/* Risk bar */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.4rem' }}>
+          <span style={{ color: 'var(--text-secondary)' }}>Next-Week Disruption Probability</span>
+          <span style={{ fontWeight: 800, color: forecast.color }}>{forecast.pct}%</span>
+        </div>
+        <div className="progress-wrap">
+          <div style={{ width: `${forecast.pct}%`, height: '100%', background: forecast.color, borderRadius: 99, transition: 'width 0.8s ease' }} />
+        </div>
+      </div>
+
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '0.5rem',
+        padding: '0.5rem 0.75rem',
+        background: `${forecast.color}11`,
+        borderRadius: 8, border: `1px solid ${forecast.color}33`,
+      }}>
+        <span style={{ fontSize: '1rem' }}>
+          {forecast.level === 'Low' ? '' : forecast.level === 'Moderate' ? '' : ''}
+        </span>
+        <div>
+          <div style={{ fontWeight: 700, color: forecast.color, fontSize: '0.8rem' }}>{forecast.level} Risk</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{forecast.tip}</div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <span className="badge badge-approved" style={{ cursor: 'default' }}>Add UPI for instant payout</span>
+        <span className="badge badge-info" style={{ cursor: 'default' }}>AI-monitored 24/7</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Dashboard ─────────────────────────────────────────────────────────────
 export default function Dashboard({ authenticatedPartnerId = '', authenticatedPartnerProfile = null, onPartnerLogout = null }) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -231,6 +436,10 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
   const [error,     setError]     = useState('');
   const [showModal, setShowModal] = useState(false);
   const [claimResult, setClaimResult] = useState(null);
+  const [showPayout,  setShowPayout]  = useState(false);
+  const [toast, setToast] = useState('');
+  const [renewingPolicy, setRenewingPolicy] = useState(false);
+  const [selectedRenewPlan, setSelectedRenewPlan] = useState('standard');
 
   const load = useCallback(async (id) => {
     if (!id) return;
@@ -239,7 +448,7 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
       const [partRes, claimRes, eventsRes] = await Promise.all([
         getPartner(id),
         getPartnerClaims(id, { limit: 50 }),
-        listDisruptionEvents({ limit: 20 }),
+        listDisruptionEvents({ limit: 40 }),
       ]);
       setPartner(partRes.deliveryPartner);
       setClaims(claimRes.claims || []);
@@ -258,6 +467,46 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
     }
   }, [authenticatedPartnerId, navigate, partnerId]);
 
+  useEffect(() => {
+    if (!partnerId) {
+      return undefined;
+    }
+
+    const eventSource = createPartnerAlertStream(partnerId);
+    eventSource.addEventListener('claim-alert', (eventMessage) => {
+      try {
+        const payload = JSON.parse(eventMessage.data || '{}');
+        const amountLabel = payload?.payoutAmountInRupees
+          ? `₹${Number(payload.payoutAmountInRupees).toLocaleString('en-IN')}`
+          : '';
+        setToast(amountLabel
+          ? `Auto-claim payout processed: ${amountLabel}`
+          : (payload.message || 'A claim update has arrived.'));
+        load(partnerId);
+      } catch {
+        setToast('A claim update has arrived.');
+        load(partnerId);
+      }
+    });
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [partnerId, load]);
+
+  useEffect(() => {
+    if (!toast) {
+      return undefined;
+    }
+
+    const timerId = setTimeout(() => setToast(''), 3500);
+    return () => clearTimeout(timerId);
+  }, [toast]);
+
   const handleSearch = () => {
     if (!inputId.trim()) return;
     setPartnerId(inputId.trim());
@@ -268,14 +517,57 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
     setClaimResult(res);
     setShowModal(false);
     load(partnerId);
+    // Show payout modal if auto-approved
+    if (res?.wasAutoApproved) {
+      setTimeout(() => setShowPayout(true), 400);
+    }
+  };
+
+  const handleRenewPolicy = async () => {
+    if (!partner?._id && !partner?.partnerId) {
+      return;
+    }
+
+    setRenewingPolicy(true);
+    try {
+      await subscribePolicy({
+        deliveryPartnerId: partner._id || partner.partnerId,
+        selectedPlanTier: selectedRenewPlan,
+      });
+      setToast('Policy renewed successfully. Your new weekly coverage is active.');
+      await load(partnerId);
+    } catch (renewError) {
+      setToast(`Policy renewal failed: ${renewError.message}`);
+    } finally {
+      setRenewingPolicy(false);
+    }
   };
 
   const policy = partner?.activeInsurancePolicyId;
+  const isPolicyExpired = policy ? new Date(policy.policyEndDate) < new Date() : false;
   const totalCompensation = partner?.totalCompensationReceivedInRupees || 0;
   const approvedClaims = claims.filter(c => ['approved_for_payout','payout_processed'].includes(c.currentClaimStatus)).length;
+  const usedCoverage = policy ? (policy.maximumWeeklyCoverageInRupees - policy.remainingCoverageInRupees) : 0;
 
   return (
     <div className="page">
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          top: 85,
+          right: 20,
+          zIndex: 9999,
+          border: '1px solid var(--border-accent)',
+          background: 'var(--bg-secondary)',
+          borderRadius: 10,
+          padding: '0.75rem 1rem',
+          boxShadow: 'var(--shadow)',
+          fontSize: '0.86rem',
+        }}>
+          {toast}
+        </div>
+      )}
+
       <div className="page-header">
         <div className="container">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
@@ -325,15 +617,14 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
         {partner && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }} className="animate-slide-up">
 
-            {claimResult && (
-              <div className={`alert ${claimResult.wasAutoApproved ? 'alert-success' : 'alert-warning'}`}>
-                {claimResult.wasAutoApproved
-                  ? ` Claim approved! Payout of ${formatInr(claimResult.claim?.approvedPayoutAmountInRupees)} initiated.`
-                  : ' Claim submitted and flagged for manual review.'}
+            {/* Claim result non-payout banner */}
+            {claimResult && !claimResult.wasAutoApproved && (
+              <div className="alert alert-warning">
+                Claim submitted and flagged for manual review.
               </div>
             )}
 
-            {/* Search bar (compact) */}
+            {/* Compact search bar */}
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <input className="form-input" value={inputId} onChange={e => setInputId(e.target.value)}
                 placeholder="Partner ID" style={{ maxWidth: 320 }} onKeyDown={e => e.key === 'Enter' && handleSearch()} />
@@ -368,16 +659,17 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Total Received</div>
                 <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--emerald)' }}>{formatInr(totalCompensation)}</div>
+                <div style={{ marginTop: '0.3rem' }}><CoverageStatusDot policy={policy} /></div>
               </div>
             </div>
 
             {/* Stats */}
             <div className="stats-grid">
               {[
-                { icon: '📄', cls: 'stat-icon-amber',   label: 'Total Claims',     value: claims.length },
-                { icon: '✅', cls: 'stat-icon-emerald',  label: 'Approved',         value: approvedClaims },
-                { icon: '🛡️', cls: 'stat-icon-sky',     label: 'Coverage Left',    value: policy ? formatInr(policy.remainingCoverageInRupees) : '' },
-                { icon: '📅', cls: 'stat-icon-indigo',  label: 'Policy Expires',   value: policy ? new Date(policy.policyEndDate).toLocaleDateString('en-IN', { day:'numeric', month:'short' }) : 'No policy' },
+                { icon: <StatLogo type="claims" />, cls: 'stat-icon-amber',   label: 'Total Claims',     value: claims.length },
+                { icon: <StatLogo type="approved" />, cls: 'stat-icon-emerald',  label: 'Approved',         value: approvedClaims },
+                { icon: <StatLogo type="coverage" />, cls: 'stat-icon-sky',     label: 'Coverage Left',    value: policy ? formatInr(policy.remainingCoverageInRupees) : '—' },
+                { icon: <StatLogo type="expiry" />, cls: 'stat-icon-indigo',  label: 'Policy Expires',   value: policy ? new Date(policy.policyEndDate).toLocaleDateString('en-IN', { day:'numeric', month:'short' }) : 'No policy' },
               ].map(s => (
                 <div className="card card-sm stat-card" key={s.label}>
                   <div className={`stat-icon ${s.cls}`}>{s.icon}</div>
@@ -387,7 +679,45 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
               ))}
             </div>
 
-            {/* Policy card */}
+            {/* Coverage donut + sparkline row */}
+            {policy && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem' }}>
+
+                {/* Coverage ring */}
+                <div className="card">
+                  <div style={{ fontWeight: 700, marginBottom: '1rem' }}>Coverage Used This Week</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                    <CoverageDonut used={usedCoverage} max={policy.maximumWeeklyCoverageInRupees} />
+                    <div style={{ flex: 1 }}>
+                      {[
+                        ['Used', formatInr(usedCoverage), 'var(--emerald)'],
+                        ['Remaining', formatInr(policy.remainingCoverageInRupees), 'var(--text-primary)'],
+                        ['Max Coverage', formatInr(policy.maximumWeeklyCoverageInRupees), 'var(--text-muted)'],
+                      ].map(([l, v, c]) => (
+                        <div key={l} style={{ marginBottom: '0.4rem' }}>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{l}</div>
+                          <div style={{ fontWeight: 700, color: c }}>{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payout sparkline */}
+                <div className="card">
+                  <div style={{ fontWeight: 700, marginBottom: '1rem' }}>Recent Payouts</div>
+                  <PayoutSparkline claims={claims} />
+                  {approvedClaims > 0 && (
+                    <div style={{ marginTop: '0.75rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                      {approvedClaims} claim{approvedClaims !== 1 ? 's' : ''} paid out — total {formatInr(totalCompensation)}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            )}
+
+            {/* Active policy card */}
             {policy && (
               <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -396,7 +726,7 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
                   {[
-                    ['Plan',        policy.selectedPlanTier ? policy.selectedPlanTier.charAt(0).toUpperCase() + policy.selectedPlanTier.slice(1) : ''],
+                    ['Plan', policy.selectedPlanTier ? policy.selectedPlanTier.charAt(0).toUpperCase() + policy.selectedPlanTier.slice(1) : ''],
                     ['Weekly Premium', formatInr(policy.weeklyPremiumChargedInRupees)],
                     ['Max Coverage',   formatInr(policy.maximumWeeklyCoverageInRupees)],
                   ].map(([l, v]) => (
@@ -423,16 +753,38 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
               </div>
             )}
 
-            {!policy && (
+            {(!policy || isPolicyExpired) && (
               <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
-                <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🛡️</div>
-                <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>No active policy</div>
+                <div style={{ fontWeight: 700, marginBottom: '0.4rem' }}>
+                  {policy && isPolicyExpired ? 'Policy expired, renew now' : 'No active policy'}
+                </div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem' }}>
-                  Subscribe to a plan to get compensation when disruptions occur.
+                  Select a weekly plan to continue automated claim protection without interruption.
                 </p>
-                <button className="btn btn-primary" onClick={() => navigate('/register')}>Subscribe Now</button>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+                  {['basic', 'standard', 'premium'].map((planTier) => (
+                    <button
+                      key={planTier}
+                      className={`btn btn-sm ${selectedRenewPlan === planTier ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setSelectedRenewPlan(planTier)}
+                    >
+                      {planTier.charAt(0).toUpperCase() + planTier.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                <button className="btn btn-primary" onClick={handleRenewPolicy} disabled={renewingPolicy}>
+                  {renewingPolicy ? 'Activating...' : 'Renew Weekly Policy'}
+                </button>
               </div>
             )}
+
+            {/* City risk profile */}
+            <RiskProfileCard city={partner.primaryDeliveryCity} />
+
+            <DisruptionMap
+              partnerCoordinates={partner.primaryDeliveryZoneCoordinates}
+              events={events.slice(0, 25)}
+            />
 
             {/* Claims table */}
             <div>
@@ -451,9 +803,10 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
                       <thead>
                         <tr>
                           <th>Event</th>
-                          <th>Status</th>
+                          <th>Timeline</th>
                           <th>Requested</th>
                           <th>Paid Out</th>
+                          <th>Claim Confidence</th>
                           <th>Date</th>
                         </tr>
                       </thead>
@@ -464,10 +817,23 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
                               <div className="td-name">{humanizeDisruptionType(c.triggeringDisruptionEventId?.disruptionType) || ''}</div>
                               <div className="td-sub">{c.triggeringDisruptionEventId?.affectedCityName || ''}</div>
                             </td>
-                            <td><StatusBadge status={c.currentClaimStatus} /></td>
+                            <td><ClaimTimeline status={c.currentClaimStatus} /></td>
                             <td>{formatInr(c.requestedCompensationAmountInRupees)}</td>
                             <td style={{ color: 'var(--emerald)', fontWeight: 700 }}>
                               {c.approvedPayoutAmountInRupees != null ? formatInr(c.approvedPayoutAmountInRupees) : ''}
+                            </td>
+                            <td style={{ maxWidth: 260 }}>
+                              {extractClaimConfidenceNotes(c).length === 0 ? (
+                                <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>No anomaly flags</span>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.22rem' }}>
+                                  {extractClaimConfidenceNotes(c).slice(0, 2).map((noteText, noteIndex) => (
+                                    <span key={`${c._id}-${noteIndex}`} style={{ color: 'var(--text-secondary)', fontSize: '0.76rem' }}>
+                                      • {noteText}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </td>
                             <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                               {new Date(c.claimSubmissionTimestamp).toLocaleDateString('en-IN')}
@@ -491,6 +857,15 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
           events={events}
           onClose={() => setShowModal(false)}
           onSuccess={handleClaimSuccess}
+        />
+      )}
+
+      {showPayout && claimResult && (
+        <PayoutModal
+          amount={claimResult.claim?.approvedPayoutAmountInRupees || 0}
+          txnId={claimResult.claim?.razorpayPayoutTransactionId}
+          partnerName={partner?.fullName}
+          onClose={() => setShowPayout(false)}
         />
       )}
     </div>

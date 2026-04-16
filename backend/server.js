@@ -16,6 +16,13 @@ const mongoose = require('mongoose');
 const { connectToDatabase } = require('./config/databaseConfig');
 const { startWeatherMonitoring, runWeatherMonitoringCycle } = require('./services/weatherMonitoringService');
 const { authenticateRequestToken, requireAdminRole } = require('./middleware/authMiddleware');
+const { registerPartnerAlertStream } = require('./services/alertStreamService');
+const { processIncomingInsuranceClaim } = require('./services/claimProcessingService');
+const DeliveryPartner = require('./models/DeliveryPartner');
+const InsurancePolicy = require('./models/InsurancePolicy');
+const InsuranceClaim = require('./models/InsuranceClaim');
+const DisruptionEvent = require('./models/DisruptionEvent');
+const { INSURANCE_CLAIM_STATUSES, INSURANCE_POLICY_STATUSES } = require('./config/parametricInsuranceConstants');
 const deliveryPartnerRouter = require('./routes/deliveryPartnerRoutes');
 const insurancePolicyRouter = require('./routes/insurancePolicyRoutes');
 const insuranceClaimRouter  = require('./routes/insuranceClaimRoutes');
@@ -86,6 +93,20 @@ expressApplication.use('/api/insurance-claims',   insuranceClaimRouter);
 expressApplication.use('/api/disruption-events',  disruptionEventRouter);
 expressApplication.use('/api/auth',               authRouter);
 
+expressApplication.get('/api/alerts/stream', async (request, response) => {
+  const partnerId = String(request.query.partnerId || '').trim();
+
+  if (!partnerId || !mongoose.isValidObjectId(partnerId)) {
+    return response.status(400).json({
+      success: false,
+      message: 'Valid partnerId query parameter is required for alert stream.',
+    });
+  }
+
+  registerPartnerAlertStream(partnerId, response);
+  return undefined;
+});
+
 // ============================ Admin Utility Endpoints ============================
 
 /**
@@ -99,6 +120,195 @@ expressApplication.post('/api/admin/trigger-weather-check', authenticateRequestT
     return res.status(200).json({ success: true, ...result });
   } catch (err) {
     return res.status(500).json({ success: false, errorDetails: err.message });
+  }
+});
+
+expressApplication.get('/api/admin/stats', authenticateRequestToken, requireAdminRole, async (request, response) => {
+  try {
+    const [
+      totalPartners,
+      verifiedPartners,
+      totalClaims,
+      totalEvents,
+      claimCountsByStatus,
+      payoutAggregate,
+      flaggedClaimsCount,
+      weeklyPayoutTrend,
+      partnerEarningsAggregate,
+    ] = await Promise.all([
+      DeliveryPartner.countDocuments({}),
+      DeliveryPartner.countDocuments({ isAccountVerified: true }),
+      InsuranceClaim.countDocuments({}),
+      DisruptionEvent.countDocuments({}),
+      InsuranceClaim.aggregate([
+        { $group: { _id: '$currentClaimStatus', count: { $sum: 1 } } },
+      ]),
+      InsuranceClaim.aggregate([
+        { $match: { currentClaimStatus: INSURANCE_CLAIM_STATUSES.PAYOUT_PROCESSED } },
+        { $group: { _id: null, totalPayout: { $sum: '$approvedPayoutAmountInRupees' } } },
+      ]),
+      InsuranceClaim.countDocuments({ currentClaimStatus: INSURANCE_CLAIM_STATUSES.FLAGGED_FOR_MANUAL_REVIEW }),
+      InsuranceClaim.aggregate([
+        { $match: { currentClaimStatus: INSURANCE_CLAIM_STATUSES.PAYOUT_PROCESSED } },
+        {
+          $group: {
+            _id: {
+              year: { $isoWeekYear: '$claimSubmissionTimestamp' },
+              week: { $isoWeek: '$claimSubmissionTimestamp' },
+            },
+            totalPayout: { $sum: '$approvedPayoutAmountInRupees' },
+            claims: { $sum: 1 },
+          },
+        },
+        { $sort: { '_id.year': -1, '_id.week': -1 } },
+        { $limit: 8 },
+        { $sort: { '_id.year': 1, '_id.week': 1 } },
+      ]),
+      DeliveryPartner.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalMonthlyEarnings: { $sum: { $ifNull: ['$averageMonthlyEarningsInRupees', 0] } },
+          },
+        },
+      ]),
+    ]);
+
+    const countsByStatus = claimCountsByStatus.reduce((accumulator, claimStatusGroup) => {
+      accumulator[claimStatusGroup._id] = claimStatusGroup.count;
+      return accumulator;
+    }, {});
+
+    const totalPayout = Number(payoutAggregate?.[0]?.totalPayout || 0);
+    const monthlyEarnings = Number(partnerEarningsAggregate?.[0]?.totalMonthlyEarnings || 0);
+
+    return response.status(200).json({
+      success: true,
+      stats: {
+        totalPartners,
+        verifiedPartners,
+        totalClaims,
+        totalEvents,
+        totalPayout,
+        flaggedClaimsCount,
+        fraudRate: totalClaims > 0 ? Number((flaggedClaimsCount / totalClaims).toFixed(4)) : 0,
+        claimsByStatus: countsByStatus,
+        earningsVsPayout: {
+          estimatedWeeklyPartnerEarnings: Math.round(monthlyEarnings / 4),
+          totalPayoutIssued: totalPayout,
+        },
+        weeklyPayoutTrend: weeklyPayoutTrend.map((entry) => ({
+          label: `W${entry._id.week}/${String(entry._id.year).slice(-2)}`,
+          payout: Number(entry.totalPayout || 0),
+          claims: Number(entry.claims || 0),
+        })),
+      },
+    });
+  } catch (error) {
+    return response.status(500).json({
+      success: false,
+      message: 'Failed to load admin statistics.',
+      errorDetails: error.message,
+    });
+  }
+});
+
+expressApplication.post('/api/admin/seed-demo', authenticateRequestToken, requireAdminRole, async (request, response) => {
+  try {
+    const city = String(request.body?.city || 'Jaipur').trim();
+    const coordinates = request.body?.coordinates || { latitude: 26.9124, longitude: 75.7873 };
+
+    const demoEmail = `demo.${city.toLowerCase().replace(/[^a-z0-9]+/g, '')}@raksharide.local`;
+    let deliveryPartner = await DeliveryPartner.findOne({ emailAddress: demoEmail });
+
+    if (!deliveryPartner) {
+      deliveryPartner = await DeliveryPartner.create({
+        fullName: `Demo Partner ${city}`,
+        emailAddress: demoEmail,
+        passwordHash: 'demo_password_hash',
+        mobilePhoneNumber: `9${Date.now().toString().slice(-9)}`,
+        primaryDeliveryCity: city,
+        primaryDeliveryZoneCoordinates: coordinates,
+        deliveryPlatformNames: ['swiggy'],
+        isEmailVerified: true,
+        isAccountVerified: true,
+        averageMonthlyEarningsInRupees: 28000,
+      });
+    }
+
+    let activePolicy = deliveryPartner.activeInsurancePolicyId
+      ? await InsurancePolicy.findById(deliveryPartner.activeInsurancePolicyId)
+      : null;
+
+    if (!activePolicy || !activePolicy.isPolicyCurrentlyActive()) {
+      const now = new Date();
+      const endDate = new Date(now);
+      endDate.setDate(endDate.getDate() + 7);
+
+      activePolicy = await InsurancePolicy.create({
+        deliveryPartnerId: deliveryPartner._id,
+        selectedPlanTier: 'standard',
+        weeklyPremiumChargedInRupees: 40,
+        maximumWeeklyCoverageInRupees: 500,
+        remainingCoverageInRupees: 500,
+        policyStartDate: now,
+        policyEndDate: endDate,
+        currentPolicyStatus: INSURANCE_POLICY_STATUSES.ACTIVE,
+      });
+
+      deliveryPartner.activeInsurancePolicyId = activePolicy._id;
+      await deliveryPartner.save();
+    }
+
+    const disruptionEvent = await DisruptionEvent.create({
+      disruptionType: 'heavy_rainfall',
+      affectedCityName: city,
+      affectedZoneCentreCoordinates: coordinates,
+      affectedRadiusInKilometres: 12,
+      measuredRainfallInMillimetres: 92,
+      measuredTemperatureInCelsius: 32,
+      measuredAirQualityIndex: 140,
+      disruptionStartTimestamp: new Date(),
+      weatherApiDataSourceName: 'demo-seeder',
+    });
+
+    const claimProcessingResult = await processIncomingInsuranceClaim({
+      deliveryPartnerId: deliveryPartner._id.toString(),
+      triggeringDisruptionEventId: disruptionEvent._id.toString(),
+      currentEnvironmentalConditions: {
+        rainfallInMillimetres: 92,
+        temperatureInCelsius: 32,
+        airQualityIndex: 140,
+      },
+      partnerLocationAtDisruptionTime: coordinates,
+      networkSignalCoordinates: coordinates,
+      minutesActiveOnDeliveryPlatform: 110,
+      beneficiaryBankDetails: {
+        accountHolderName: deliveryPartner.fullName,
+        accountNumber: '1234567890',
+        ifscCode: 'SBIN0000456',
+      },
+    });
+
+    return response.status(200).json({
+      success: true,
+      message: 'Demo data seeded successfully.',
+      demo: {
+        partnerId: deliveryPartner._id,
+        partnerEmail: deliveryPartner.emailAddress,
+        policyId: activePolicy._id,
+        disruptionEventId: disruptionEvent._id,
+        claimId: claimProcessingResult.claim._id,
+        claimStatus: claimProcessingResult.claim.currentClaimStatus,
+        wasAutoApproved: claimProcessingResult.wasAutoApproved,
+      },
+    });
+  } catch (error) {
+    return response.status(500).json({
+      success: false,
+      message: 'Failed to seed demo data.',
+      errorDetails: error.message,
+    });
   }
 });
 

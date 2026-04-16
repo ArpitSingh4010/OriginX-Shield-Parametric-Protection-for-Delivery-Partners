@@ -14,6 +14,10 @@ const CITY_RISK_FALLBACK_MAP = {
   kolkata: 'high_risk_zone',
   pune: 'moderate_risk_zone',
   ahmedabad: 'low_risk_zone',
+  jaipur: 'moderate_risk_zone',
+  lucknow: 'moderate_risk_zone',
+  surat: 'moderate_risk_zone',
+  indore: 'moderate_risk_zone',
 };
 
 async function postJsonWithTimeout(path, requestBody) {

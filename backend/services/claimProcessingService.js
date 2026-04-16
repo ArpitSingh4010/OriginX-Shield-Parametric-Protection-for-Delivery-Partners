@@ -31,6 +31,7 @@ const {
   determineCompensationAmountForDisruption,
 } = require('./disruptionThresholdChecker');
 const { initiateClaimPayout } = require('./paymentService');
+const { publishPartnerAlert } = require('./alertStreamService');
 
 const EXCLUSION_TAG_LABELS = {
   war_or_hostilities: 'war or hostile operations',
@@ -165,6 +166,15 @@ async function approveClaimAndDeductFromPolicyCoverage(
     insuranceClaim.razorpayPayoutTransactionId = payoutResult.payoutId;
     insuranceClaim.payoutProcessedTimestamp = new Date();
     await insuranceClaim.save();
+
+    publishPartnerAlert(insuranceClaim.deliveryPartnerId.toString(), {
+      type: 'claim_auto_processed',
+      claimId: insuranceClaim._id,
+      status: insuranceClaim.currentClaimStatus,
+      payoutAmountInRupees: approvedPayoutAmountInRupees,
+      payoutTransactionId: payoutResult.payoutId,
+      message: `Claim approved. Payout of INR ${approvedPayoutAmountInRupees} has been processed.`,
+    });
 
     // Update delivery partner's total compensation.
     await DeliveryPartner.findByIdAndUpdate(insuranceClaim.deliveryPartnerId, {
@@ -385,6 +395,9 @@ async function processIncomingInsuranceClaim(incomingClaimRequestData) {
     disruptionEpicentreCoordinates: triggeringDisruptionEvent.affectedZoneCentreCoordinates,
     disruptionDurationInMinutes: resolvedDisruptionDurationInMinutes,
   });
+
+  pendingClaim.fraudReviewNotes = JSON.stringify(fraudAssessmentResult.verificationDetails || {});
+  await pendingClaim.save();
 
   if (fraudAssessmentResult.requiresManualReview) {
     const escalatedClaim = await escalateClaimForManualFraudReview(
