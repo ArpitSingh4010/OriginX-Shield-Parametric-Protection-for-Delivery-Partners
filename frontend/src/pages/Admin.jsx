@@ -5,6 +5,7 @@ import {
   addAdminUser, listAdminUsers, removePartner, getAdminStats, getAiModelInfo, seedDemoData,
 } from '../api/rakshaRideApi';
 import StatusBadge from '../components/StatusBadge';
+import DisruptionMap from '../components/DisruptionMap';
 
 function StatLogo({ type = 'claims' }) {
   const iconByType = {
@@ -94,6 +95,62 @@ function DonutMetric({ label, value = 0, max = 100, color = '#10b981' }) {
       <div>
         <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem' }}>{label}</div>
         <div style={{ fontWeight: 700 }}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function MiniLineChart({ data = [], valueKey = 'totalClaims', labelKey = 'label', stroke = '#38bdf8' }) {
+  if (!data.length) {
+    return <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>No data yet</div>;
+  }
+
+  const width = 280;
+  const height = 120;
+  const pad = 10;
+  const maxValue = Math.max(1, ...data.map((item) => Number(item[valueKey] || 0)));
+
+  const points = data.map((item, index) => {
+    const x = pad + (index / Math.max(data.length - 1, 1)) * (width - pad * 2);
+    const y = height - pad - (Number(item[valueKey] || 0) / maxValue) * (height - pad * 2);
+    return `${x},${y}`;
+  });
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', display: 'block' }} role="img" aria-label="Claims per day trend">
+        <polyline points={points.join(' ')} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', fontSize: '0.68rem', marginTop: '0.35rem' }}>
+        {data.map((item) => <span key={item[labelKey]}>{item[labelKey]}</span>)}
+      </div>
+    </div>
+  );
+}
+
+function ClaimsSplitPie({ claimsByStatus = {} }) {
+  const approved = Number(claimsByStatus.approved_for_payout || 0) + Number(claimsByStatus.payout_processed || 0);
+  const flagged = Number(claimsByStatus.flagged_for_manual_review || 0);
+  const rejected = Number(claimsByStatus.rejected || 0);
+  const total = Math.max(1, approved + flagged + rejected);
+
+  const circumference = 2 * Math.PI * 24;
+  const approvedArc = (approved / total) * circumference;
+  const flaggedArc = (flagged / total) * circumference;
+  const rejectedArc = (rejected / total) * circumference;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
+      <svg width={84} height={84} viewBox="0 0 84 84" role="img" aria-label="Claims split by outcome">
+        <circle cx={42} cy={42} r={24} stroke="rgba(255,255,255,0.1)" strokeWidth={10} fill="none" />
+        <circle cx={42} cy={42} r={24} stroke="#10b981" strokeWidth={10} fill="none" strokeDasharray={`${approvedArc} ${circumference}`} transform="rotate(-90 42 42)" />
+        <circle cx={42} cy={42} r={24} stroke="#f59e0b" strokeWidth={10} fill="none" strokeDasharray={`${flaggedArc} ${circumference}`} strokeDashoffset={-approvedArc} transform="rotate(-90 42 42)" />
+        <circle cx={42} cy={42} r={24} stroke="#ef4444" strokeWidth={10} fill="none" strokeDasharray={`${rejectedArc} ${circumference}`} strokeDashoffset={-(approvedArc + flaggedArc)} transform="rotate(-90 42 42)" />
+      </svg>
+      <div style={{ display: 'grid', gap: '0.35rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+        <span>Approved: <strong style={{ color: '#10b981' }}>{approved}</strong></span>
+        <span>Flagged: <strong style={{ color: '#f59e0b' }}>{flagged}</strong></span>
+        <span>Rejected: <strong style={{ color: '#ef4444' }}>{rejected}</strong></span>
       </div>
     </div>
   );
@@ -522,8 +579,63 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
                 {seedingDemo ? 'Seeding Demo...' : 'One-Click Demo Seeder'}
               </button>
             </div>
+
+            <div className="card">
+              <div style={{ fontWeight: 700, marginBottom: '0.8rem' }}>Claims Per Day (Last 7 Days)</div>
+              <MiniLineChart
+                data={adminStats.claimsPerDay || []}
+                valueKey="totalClaims"
+                labelKey="label"
+                stroke="#38bdf8"
+              />
+            </div>
+
+            <div className="card">
+              <div style={{ fontWeight: 700, marginBottom: '0.8rem' }}>Approved vs Flagged vs Rejected</div>
+              <ClaimsSplitPie claimsByStatus={adminStats.claimsByStatus || {}} />
+            </div>
           </div>
         )}
+
+        {adminStats?.cityRiskHeatmap?.length > 0 && (
+          <div className="card" style={{ marginBottom: '1.5rem' }}>
+            <div style={{ fontWeight: 700, marginBottom: '0.8rem' }}>City-Wise Risk Heatmap</div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>City</th>
+                    <th>Partners</th>
+                    <th>Events This Week</th>
+                    <th>Intensity</th>
+                    <th>Risk Band</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminStats.cityRiskHeatmap.map((row) => (
+                    <tr key={row.cityName}>
+                      <td>{row.cityName}</td>
+                      <td>{row.totalPartners}</td>
+                      <td>{row.eventsThisWeek}</td>
+                      <td>{row.disruptionIntensity}</td>
+                      <td>
+                        <span className={`badge ${row.riskBand === 'high' ? 'badge-rejected' : row.riskBand === 'moderate' ? 'badge-pending' : 'badge-approved'}`}>
+                          <span className="badge-dot" />
+                          {row.riskBand}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <DisruptionMap
+          events={events.slice(0, 25)}
+          partnerCoordinates={partners?.[0]?.primaryDeliveryZoneCoordinates}
+        />
 
         {modelInfo?.modelMetadata && (
           <div className="card" style={{ marginBottom: '1.5rem' }}>
@@ -555,7 +667,22 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
           ))}
         </div>
 
-        {loading && <div className="loading-full"><div className="spinner" /></div>}
+        {loading && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="skeleton-grid">
+              {[1, 2, 3, 4].map((item) => (
+                <div className="skeleton-card" key={`admin-s-${item}`}>
+                  <div className="skeleton-line" style={{ width: '45%', marginBottom: '0.7rem' }} />
+                  <div className="skeleton-line" style={{ width: '70%', height: 18 }} />
+                </div>
+              ))}
+            </div>
+            <div className="skeleton-card">
+              <div className="skeleton-line" style={{ width: '35%', marginBottom: '0.8rem' }} />
+              <div className="skeleton-line" style={{ width: '100%', height: 180 }} />
+            </div>
+          </div>
+        )}
 
         {/*  Flagged Claims  */}
         {!loading && tab === 'claims' && (

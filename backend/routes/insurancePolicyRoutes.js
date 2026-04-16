@@ -65,6 +65,35 @@ insurancePolicyRouter.post(
       });
     }
 
+    const now = new Date();
+    let renewalAction = 'new_subscription';
+    let previousPolicyId = null;
+
+    if (deliveryPartner.activeInsurancePolicyId) {
+      const previousPolicy = await InsurancePolicy.findById(deliveryPartner.activeInsurancePolicyId);
+      if (previousPolicy) {
+        previousPolicyId = previousPolicy._id;
+
+        const hasPolicyExpiredByDate = new Date(previousPolicy.policyEndDate).getTime() < now.getTime();
+
+        if (hasPolicyExpiredByDate) {
+          if (previousPolicy.currentPolicyStatus !== INSURANCE_POLICY_STATUSES.EXPIRED) {
+            previousPolicy.currentPolicyStatus = INSURANCE_POLICY_STATUSES.EXPIRED;
+            await previousPolicy.save();
+          }
+          renewalAction = 'renew_expired';
+        } else if (previousPolicy.currentPolicyStatus === INSURANCE_POLICY_STATUSES.ACTIVE) {
+          // Keep a clean single-active-policy model for weekly renewals.
+          previousPolicy.currentPolicyStatus = INSURANCE_POLICY_STATUSES.CANCELLED;
+          previousPolicy.policyEndDate = now;
+          await previousPolicy.save();
+          renewalAction = 'renew_active';
+        } else {
+          renewalAction = 'resubscribe_after_inactive';
+        }
+      }
+    }
+
     const {
       adjustedWeeklyPremiumInRupees,
       maximumCoverageInRupees,
@@ -76,7 +105,7 @@ insurancePolicyRouter.post(
       averageMonthlyEarningsInRupees: deliveryPartner.averageMonthlyEarningsInRupees,
     });
 
-    const policyStartDate = new Date();
+    const policyStartDate = now;
     const policyEndDate = new Date();
     policyEndDate.setDate(policyEndDate.getDate() + 7);
 
@@ -98,7 +127,11 @@ insurancePolicyRouter.post(
 
     return response.status(201).json({
       success: true,
-      message: 'Insurance policy created successfully.',
+      message: renewalAction === 'new_subscription'
+        ? 'Insurance policy created successfully.'
+        : 'Insurance policy renewed successfully.',
+      renewalAction,
+      previousPolicyId,
       insurancePolicy: {
         policyId: savedInsurancePolicy._id,
         selectedPlanTier: savedInsurancePolicy.selectedPlanTier,

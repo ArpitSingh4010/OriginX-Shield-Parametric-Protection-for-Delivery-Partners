@@ -15,12 +15,15 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const DeliveryPartner = require('../models/DeliveryPartner');
+const InsuranceClaim = require('../models/InsuranceClaim');
 const { authenticateRequestToken, requireAdminRole } = require('../middleware/authMiddleware');
 const { validateIncomingRequest } = require('../middleware/validationMiddleware');
 const { assessCityRiskWithAi } = require('../services/aiIntegrationService');
 const { sendPartnerVerificationEmail, sendPartnerPasswordResetEmail } = require('../services/emailService');
 const { getJwtSecret } = require('../config/authConfig');
+const { INSURANCE_CLAIM_STATUSES } = require('../config/parametricInsuranceConstants');
 const {
   deliveryPartnerRegistrationValidators,
   deliveryPartnerLoginValidators,
@@ -42,6 +45,19 @@ const ALLOWED_LOCATION_RISK_CATEGORIES = new Set([
 const OTP_EXPIRY_MINUTES = 10;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const MAX_OTP_ATTEMPTS = 5;
+
+function getIsoWeekYearAndNumber(dateInput) {
+  const date = new Date(Date.UTC(dateInput.getFullYear(), dateInput.getMonth(), dateInput.getDate()));
+  const dayNumber = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNumber);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNumber = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+
+  return {
+    year: date.getUTCFullYear(),
+    week: weekNumber,
+  };
+}
 
 function generateEmailVerificationCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -674,6 +690,118 @@ deliveryPartnerRouter.get('/', async (request, response) => {
     });
   }
 });
+
+// ─── GET /api/delivery-partners/:partnerId ────────────────────────────────────
+
+/**
+ * Returns weekly earning vs payout trend for a delivery partner.
+ */
+deliveryPartnerRouter.get(
+  '/:partnerId/earnings-summary',
+  deliveryPartnerIdParamValidators,
+  validateIncomingRequest,
+  async (request, response) => {
+    try {
+      const { partnerId } = request.params;
+
+      const deliveryPartner = await DeliveryPartner.findById(partnerId)
+        .select('fullName primaryDeliveryCity averageMonthlyEarningsInRupees');
+
+      if (!deliveryPartner) {
+        return response.status(404).json({
+          success: false,
+          message: `No delivery partner found with ID: ${partnerId}`,
+        });
+      }
+
+      const now = new Date();
+      const startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 7 * 7);
+
+      const weeklyPayouts = await InsuranceClaim.aggregate([
+        {
+          $match: {
+            deliveryPartnerId: new mongoose.Types.ObjectId(partnerId),
+            claimSubmissionTimestamp: { $gte: startDate, $lte: now },
+            currentClaimStatus: {
+              $in: [
+                INSURANCE_CLAIM_STATUSES.APPROVED_FOR_PAYOUT,
+                INSURANCE_CLAIM_STATUSES.PAYOUT_PROCESSED,
+              ],
+            },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              year: { $isoWeekYear: '$claimSubmissionTimestamp' },
+              week: { $isoWeek: '$claimSubmissionTimestamp' },
+            },
+            payoutReceivedInRupees: { $sum: { $ifNull: ['$approvedPayoutAmountInRupees', 0] } },
+            claimsCount: { $sum: 1 },
+          },
+        },
+        { $sort: { '_id.year': 1, '_id.week': 1 } },
+      ]);
+
+      const payoutByWeekLabel = new Map(
+        weeklyPayouts.map((weekEntry) => [
+          `${weekEntry._id.year}-${weekEntry._id.week}`,
+          {
+            payoutReceivedInRupees: Number(weekEntry.payoutReceivedInRupees || 0),
+            claimsCount: Number(weekEntry.claimsCount || 0),
+          },
+        ])
+      );
+
+      const estimatedWeeklyEarnings = Math.max(
+        0,
+        Math.round(Number(deliveryPartner.averageMonthlyEarningsInRupees || 0) / 4)
+      );
+
+      const trend = [];
+      for (let offset = 7; offset >= 0; offset -= 1) {
+        const weekDate = new Date(now);
+        weekDate.setDate(weekDate.getDate() - offset * 7);
+
+        const { year: weekYear, week: weekNumber } = getIsoWeekYearAndNumber(weekDate);
+        const key = `${weekYear}-${weekNumber}`;
+        const weekPayout = payoutByWeekLabel.get(key) || { payoutReceivedInRupees: 0, claimsCount: 0 };
+
+        trend.push({
+          label: `W${weekNumber}`,
+          year: weekYear,
+          week: weekNumber,
+          estimatedEarningsInRupees: estimatedWeeklyEarnings,
+          payoutReceivedInRupees: weekPayout.payoutReceivedInRupees,
+          claimsCount: weekPayout.claimsCount,
+        });
+      }
+
+      return response.status(200).json({
+        success: true,
+        partner: {
+          partnerId,
+          fullName: deliveryPartner.fullName,
+          city: deliveryPartner.primaryDeliveryCity,
+        },
+        summary: {
+          estimatedWeeklyEarningsInRupees: estimatedWeeklyEarnings,
+          totalPayoutInRangeInRupees: trend.reduce((sum, entry) => sum + entry.payoutReceivedInRupees, 0),
+          totalClaimsInRange: trend.reduce((sum, entry) => sum + entry.claimsCount, 0),
+          weeksCovered: trend.length,
+        },
+        trend,
+      });
+    } catch (error) {
+      return response.status(500).json({
+        success: false,
+        message: 'Failed to load earnings summary for delivery partner.',
+        errorDetails: error.message,
+      });
+    }
+  }
+);
 
 // ─── GET /api/delivery-partners/:partnerId ────────────────────────────────────
 

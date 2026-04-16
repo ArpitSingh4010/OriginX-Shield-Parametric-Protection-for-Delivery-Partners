@@ -30,7 +30,7 @@ const STATUS_MAP = {
 export default function StatusBadge({ status }) {
   const cfg = STATUS_MAP[status] || { label: status, cls: 'badge-info' };
   return (
-    <span className={`badge ${cfg.cls}`}>
+    <span className={`badge ${cfg.cls}`} role="status" aria-label={`Status: ${cfg.label}`}>
       <span className="badge-dot" />
       {cfg.label}
     </span>

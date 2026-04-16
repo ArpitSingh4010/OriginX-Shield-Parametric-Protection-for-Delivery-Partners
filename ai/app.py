@@ -273,6 +273,11 @@ def quick_risk_assess():
         'kolkata':   {'lat': 22.5726, 'lon': 88.3639, 'records': 16, 'avg_loss': 25.0, 'weeks': 52, 'city_risk': 0.42},
         'pune':      {'lat': 18.5204, 'lon': 73.8567, 'records': 10, 'avg_loss': 15.0, 'weeks': 52, 'city_risk': 0.23},
         'ahmedabad': {'lat': 23.0225, 'lon': 72.5714, 'records':  8, 'avg_loss': 12.0, 'weeks': 52, 'city_risk': 0.18},
+        'jaipur':    {'lat': 26.9124, 'lon': 75.7873, 'records': 11, 'avg_loss': 17.0, 'weeks': 52, 'city_risk': 0.31},
+        'surat':     {'lat': 21.1702, 'lon': 72.8311, 'records': 13, 'avg_loss': 19.5, 'weeks': 52, 'city_risk': 0.33},
+        'lucknow':   {'lat': 26.8467, 'lon': 80.9462, 'records': 12, 'avg_loss': 18.5, 'weeks': 52, 'city_risk': 0.30},
+        'bhopal':    {'lat': 23.2599, 'lon': 77.4126, 'records':  9, 'avg_loss': 14.0, 'weeks': 52, 'city_risk': 0.24},
+        'nagpur':    {'lat': 21.1458, 'lon': 79.0882, 'records': 10, 'avg_loss': 16.0, 'weeks': 52, 'city_risk': 0.27},
     }
 
     try:

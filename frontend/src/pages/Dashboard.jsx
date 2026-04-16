@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   getPartner,
   getPartnerClaims,
+  getPartnerEarningsSummary,
   submitClaim,
   listDisruptionEvents,
   subscribePolicy,
@@ -12,6 +13,7 @@ import StatusBadge from '../components/StatusBadge';
 import PayoutModal from '../components/PayoutModal';
 import DisruptionMap from '../components/DisruptionMap';
 import ClaimTimeline from '../components/ClaimTimeline';
+import EarningsTrendChart from '../components/EarningsTrendChart';
 
 function StatLogo({ type = 'claims' }) {
   const iconByType = {
@@ -440,19 +442,28 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
   const [toast, setToast] = useState('');
   const [renewingPolicy, setRenewingPolicy] = useState(false);
   const [selectedRenewPlan, setSelectedRenewPlan] = useState('standard');
+  const [earningsTrend, setEarningsTrend] = useState([]);
+  const [earningsSummary, setEarningsSummary] = useState(null);
 
   const load = useCallback(async (id) => {
     if (!id) return;
     setLoading(true); setError(''); setPartner(null); setClaims([]);
     try {
-      const [partRes, claimRes, eventsRes] = await Promise.all([
+      const [partRes, claimRes, eventsRes, earningsRes] = await Promise.allSettled([
         getPartner(id),
         getPartnerClaims(id, { limit: 50 }),
         listDisruptionEvents({ limit: 40 }),
+        getPartnerEarningsSummary(id),
       ]);
-      setPartner(partRes.deliveryPartner);
-      setClaims(claimRes.claims || []);
-      setEvents(eventsRes.disruptionEvents || []);
+      if (partRes.status !== 'fulfilled') {
+        throw new Error(partRes.reason?.message || 'Failed to load partner profile.');
+      }
+
+      setPartner(partRes.value.deliveryPartner);
+      setClaims(claimRes.status === 'fulfilled' ? (claimRes.value.claims || []) : []);
+      setEvents(eventsRes.status === 'fulfilled' ? (eventsRes.value.disruptionEvents || []) : []);
+      setEarningsTrend(earningsRes.status === 'fulfilled' ? (earningsRes.value.trend || []) : []);
+      setEarningsSummary(earningsRes.status === 'fulfilled' ? (earningsRes.value.summary || null) : null);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   }, []);
@@ -545,6 +556,10 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
 
   const policy = partner?.activeInsurancePolicyId;
   const isPolicyExpired = policy ? new Date(policy.policyEndDate) < new Date() : false;
+  const policyDaysToExpiry = policy
+    ? Math.ceil((new Date(policy.policyEndDate).getTime() - Date.now()) / 86400000)
+    : null;
+  const shouldShowRenewalCta = !policy || isPolicyExpired || Number(policyDaysToExpiry) <= 2;
   const totalCompensation = partner?.totalCompensationReceivedInRupees || 0;
   const approvedClaims = claims.filter(c => ['approved_for_payout','payout_processed'].includes(c.currentClaimStatus)).length;
   const usedCoverage = policy ? (policy.maximumWeeklyCoverageInRupees - policy.remainingCoverageInRupees) : 0;
@@ -612,7 +627,22 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
           </div>
         )}
 
-        {loading && <div className="loading-full"><div className="spinner" /></div>}
+        {loading && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="skeleton-grid">
+              {[1, 2, 3, 4].map((item) => (
+                <div className="skeleton-card" key={`dash-s-${item}`}>
+                  <div className="skeleton-line" style={{ width: '45%', marginBottom: '0.7rem' }} />
+                  <div className="skeleton-line" style={{ width: '75%', height: 18 }} />
+                </div>
+              ))}
+            </div>
+            <div className="skeleton-card">
+              <div className="skeleton-line" style={{ width: '30%', marginBottom: '0.8rem' }} />
+              <div className="skeleton-line" style={{ width: '100%', height: 180 }} />
+            </div>
+          </div>
+        )}
 
         {partner && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }} className="animate-slide-up">
@@ -753,10 +783,14 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
               </div>
             )}
 
-            {(!policy || isPolicyExpired) && (
+            {shouldShowRenewalCta && (
               <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
                 <div style={{ fontWeight: 700, marginBottom: '0.4rem' }}>
-                  {policy && isPolicyExpired ? 'Policy expired, renew now' : 'No active policy'}
+                  {!policy
+                    ? 'No active policy'
+                    : isPolicyExpired
+                      ? 'Policy expired, renew now'
+                      : `Policy expiring in ${policyDaysToExpiry} day${policyDaysToExpiry === 1 ? '' : 's'}`}
                 </div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem' }}>
                   Select a weekly plan to continue automated claim protection without interruption.
@@ -785,6 +819,18 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
               partnerCoordinates={partner.primaryDeliveryZoneCoordinates}
               events={events.slice(0, 25)}
             />
+
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.9rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ fontWeight: 700 }}>Weekly Earnings vs Payout</div>
+                {earningsSummary && (
+                  <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                    Total payout (8 weeks): {formatInr(earningsSummary.totalPayoutInRangeInRupees)}
+                  </div>
+                )}
+              </div>
+              <EarningsTrendChart trend={earningsTrend} />
+            </div>
 
             {/* Claims table */}
             <div>

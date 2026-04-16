@@ -125,20 +125,41 @@ expressApplication.post('/api/admin/trigger-weather-check', authenticateRequestT
 
 expressApplication.get('/api/admin/stats', authenticateRequestToken, requireAdminRole, async (request, response) => {
   try {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
     const [
       totalPartners,
       verifiedPartners,
+      activePolicies,
       totalClaims,
+      claimsThisWeek,
       totalEvents,
       claimCountsByStatus,
       payoutAggregate,
       flaggedClaimsCount,
       weeklyPayoutTrend,
       partnerEarningsAggregate,
+      claimsPerDay,
+      cityWisePartnerDensity,
+      cityWiseEventsThisWeek,
     ] = await Promise.all([
       DeliveryPartner.countDocuments({}),
       DeliveryPartner.countDocuments({ isAccountVerified: true }),
+      InsurancePolicy.countDocuments({
+        currentPolicyStatus: INSURANCE_POLICY_STATUSES.ACTIVE,
+        policyEndDate: { $gte: now },
+      }),
       InsuranceClaim.countDocuments({}),
+      InsuranceClaim.countDocuments({
+        claimSubmissionTimestamp: { $gte: startOfWeek },
+      }),
       DisruptionEvent.countDocuments({}),
       InsuranceClaim.aggregate([
         { $group: { _id: '$currentClaimStatus', count: { $sum: 1 } } },
@@ -172,6 +193,47 @@ expressApplication.get('/api/admin/stats', authenticateRequestToken, requireAdmi
           },
         },
       ]),
+      InsuranceClaim.aggregate([
+        { $match: { claimSubmissionTimestamp: { $gte: sevenDaysAgo } } },
+        {
+          $group: {
+            _id: {
+              dateKey: {
+                $dateToString: { format: '%Y-%m-%d', date: '$claimSubmissionTimestamp' },
+              },
+              dateLabel: {
+                $dateToString: { format: '%d %b', date: '$claimSubmissionTimestamp' },
+              },
+            },
+            totalClaims: { $sum: 1 },
+          },
+        },
+        { $sort: { '_id.dateKey': 1 } },
+      ]),
+      DeliveryPartner.aggregate([
+        {
+          $group: {
+            _id: '$primaryDeliveryCity',
+            totalPartners: { $sum: 1 },
+            verifiedPartners: {
+              $sum: {
+                $cond: [{ $eq: ['$isAccountVerified', true] }, 1, 0],
+              },
+            },
+          },
+        },
+        { $sort: { totalPartners: -1 } },
+        { $limit: 12 },
+      ]),
+      DisruptionEvent.aggregate([
+        { $match: { disruptionStartTimestamp: { $gte: startOfWeek } } },
+        {
+          $group: {
+            _id: '$affectedCityName',
+            eventsThisWeek: { $sum: 1 },
+          },
+        },
+      ]),
     ]);
 
     const countsByStatus = claimCountsByStatus.reduce((accumulator, claimStatusGroup) => {
@@ -181,18 +243,55 @@ expressApplication.get('/api/admin/stats', authenticateRequestToken, requireAdmi
 
     const totalPayout = Number(payoutAggregate?.[0]?.totalPayout || 0);
     const monthlyEarnings = Number(partnerEarningsAggregate?.[0]?.totalMonthlyEarnings || 0);
+    const cityEventMap = new Map(
+      cityWiseEventsThisWeek.map((entry) => [entry._id, Number(entry.eventsThisWeek || 0)])
+    );
+
+    const cityRiskHeatmap = cityWisePartnerDensity.map((cityEntry) => {
+      const cityName = cityEntry._id || 'Unknown';
+      const eventsInWeek = cityEventMap.get(cityName) || 0;
+      const partnersInCity = Number(cityEntry.totalPartners || 0);
+      const disruptionIntensity = partnersInCity > 0
+        ? Number((eventsInWeek / partnersInCity).toFixed(2))
+        : 0;
+
+      let riskBand = 'low';
+      if (disruptionIntensity >= 0.4) {
+        riskBand = 'high';
+      } else if (disruptionIntensity >= 0.2) {
+        riskBand = 'moderate';
+      }
+
+      return {
+        cityName,
+        totalPartners: partnersInCity,
+        verifiedPartners: Number(cityEntry.verifiedPartners || 0),
+        eventsThisWeek: eventsInWeek,
+        disruptionIntensity,
+        riskBand,
+      };
+    });
 
     return response.status(200).json({
       success: true,
       stats: {
         totalPartners,
         verifiedPartners,
+        activePolicies,
         totalClaims,
+        claimsThisWeek,
         totalEvents,
+        totalPayouts: totalPayout,
+        flaggedClaims: flaggedClaimsCount,
         totalPayout,
         flaggedClaimsCount,
         fraudRate: totalClaims > 0 ? Number((flaggedClaimsCount / totalClaims).toFixed(4)) : 0,
         claimsByStatus: countsByStatus,
+        claimsPerDay: claimsPerDay.map((entry) => ({
+          label: entry._id.dateLabel,
+          totalClaims: Number(entry.totalClaims || 0),
+        })),
+        cityRiskHeatmap,
         earningsVsPayout: {
           estimatedWeeklyPartnerEarnings: Math.round(monthlyEarnings / 4),
           totalPayoutIssued: totalPayout,

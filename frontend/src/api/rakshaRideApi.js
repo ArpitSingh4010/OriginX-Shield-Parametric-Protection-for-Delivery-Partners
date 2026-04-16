@@ -68,6 +68,7 @@ export const resendPartnerEmailVerificationOtp = (body) => request(`${BASE}/deli
 export const requestPartnerPasswordResetOtp = (body) => request(`${BASE}/delivery-partners/forgot-password`, { method: 'POST', body: JSON.stringify(body) });
 export const resetPartnerPasswordWithOtp = (body) => request(`${BASE}/delivery-partners/reset-password`, { method: 'POST', body: JSON.stringify(body) });
 export const getPartner          = (id)             => request(`${BASE}/delivery-partners/${id}`);
+export const getPartnerEarningsSummary = (id)       => request(`${BASE}/delivery-partners/${id}/earnings-summary`);
 export const listPartners        = (params = {})    => request(`${BASE}/delivery-partners?${new URLSearchParams(params)}`);
 export const verifyPartner       = (id)             => request(`${BASE}/delivery-partners/${id}/verify`, { method: 'PATCH' });
 export const updatePartner       = (id, body)       => request(`${BASE}/delivery-partners/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
