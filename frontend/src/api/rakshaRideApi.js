@@ -150,6 +150,10 @@ export const listSupportTickets = (params = {}, adminAccessToken) => request(`${
   method: 'GET',
   headers: createAdminAuthHeaders(adminAccessToken),
 });
+export const getMySupportTickets = (params = {}, partnerAccessToken) => request(`${BASE}/customer-support/my-tickets?${new URLSearchParams(params)}`, {
+  method: 'GET',
+  headers: partnerAccessToken ? { Authorization: `Bearer ${partnerAccessToken}` } : {},
+});
 
 // ----- Python AI -------------------------------------------------------------
 export const aiQuickRiskAssess   = (body) => request(`${AI}/quick-risk-assess`, { method: 'POST', body: JSON.stringify(body) });

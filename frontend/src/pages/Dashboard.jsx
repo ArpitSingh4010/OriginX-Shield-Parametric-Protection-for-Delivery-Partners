@@ -7,8 +7,14 @@ import {
   submitClaim,
   listDisruptionEvents,
   subscribePolicy,
+  submitSupportTicket,
+  getMySupportTickets,
   createPartnerAlertStream,
 } from '../api/rakshaRideApi';
+import {
+  SUPPORT_CATEGORY_OPTIONS,
+  SUPPORT_STATUS_VALUE_TO_LABEL,
+} from '../constants/support';
 import StatusBadge from '../components/StatusBadge';
 import PayoutModal from '../components/PayoutModal';
 import DisruptionMap from '../components/DisruptionMap';
@@ -60,6 +66,7 @@ function ProgressBar({ value, max, color = 'amber' }) {
 
 const formatInr = (amount) => `₹${Number(amount || 0).toLocaleString('en-IN')}`;
 const humanizeDisruptionType = (type = '') => String(type || '').replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+const PARTNER_AUTH_TOKEN_SESSION_STORAGE_KEY = 'raksharide_partner_auth_token';
 
 function extractClaimConfidenceNotes(claimItem) {
   const rawNotes = String(claimItem?.fraudReviewNotes || '').trim();
@@ -444,6 +451,17 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
   const [selectedRenewPlan, setSelectedRenewPlan] = useState('standard');
   const [earningsTrend, setEarningsTrend] = useState([]);
   const [earningsSummary, setEarningsSummary] = useState(null);
+  const [supportTickets, setSupportTickets] = useState([]);
+  const [supportLoading, setSupportLoading] = useState(false);
+  const [supportSubmitting, setSupportSubmitting] = useState(false);
+  const [supportError, setSupportError] = useState('');
+  const [supportInfo, setSupportInfo] = useState('');
+  const [supportForm, setSupportForm] = useState({
+    issueCategory: 'general',
+    subject: '',
+    message: '',
+    mobilePhoneNumber: '',
+  });
 
   const load = useCallback(async (id) => {
     if (!id) return;
@@ -517,6 +535,99 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
     const timerId = setTimeout(() => setToast(''), 3500);
     return () => clearTimeout(timerId);
   }, [toast]);
+
+  useEffect(() => {
+    if (!partnerId) {
+      return undefined;
+    }
+
+    const partnerAccessToken = window.sessionStorage.getItem(PARTNER_AUTH_TOKEN_SESSION_STORAGE_KEY) || '';
+    if (!partnerAccessToken) {
+      setSupportTickets([]);
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    const loadSupportTickets = async () => {
+      setSupportLoading(true);
+      setSupportError('');
+
+      try {
+        const response = await getMySupportTickets({ limit: 10 }, partnerAccessToken);
+        if (!isCancelled) {
+          setSupportTickets(response.tickets || []);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setSupportTickets([]);
+          setSupportError(error.message || 'Failed to load support tickets.');
+        }
+      } finally {
+        if (!isCancelled) {
+          setSupportLoading(false);
+        }
+      }
+    };
+
+    loadSupportTickets();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [partnerId, claims.length]);
+
+  const handleSupportFormChange = (fieldName, fieldValue) => {
+    setSupportForm((previousForm) => ({
+      ...previousForm,
+      [fieldName]: fieldValue,
+    }));
+  };
+
+  const handleSupportRequestSubmit = async () => {
+    if (!partner) {
+      setSupportError('Login first to submit a support request.');
+      return;
+    }
+
+    if (!String(supportForm.subject || '').trim() || !String(supportForm.message || '').trim()) {
+      setSupportError('Subject and message are required.');
+      return;
+    }
+
+    setSupportSubmitting(true);
+    setSupportError('');
+    setSupportInfo('');
+
+    try {
+      await submitSupportTicket({
+        fullName: partner.fullName,
+        emailAddress: partner.emailAddress,
+        mobilePhoneNumber: supportForm.mobilePhoneNumber || partner.mobilePhoneNumber || '',
+        deliveryPartnerId: partner._id || partner.partnerId,
+        issueCategory: supportForm.issueCategory,
+        subject: supportForm.subject.trim(),
+        message: supportForm.message.trim(),
+      });
+
+      setSupportInfo('Support request submitted successfully.');
+      setSupportForm((previousForm) => ({
+        ...previousForm,
+        subject: '',
+        message: '',
+      }));
+
+      const partnerAccessToken = window.sessionStorage.getItem(PARTNER_AUTH_TOKEN_SESSION_STORAGE_KEY) || '';
+      if (partnerAccessToken) {
+        const response = await getMySupportTickets({ limit: 10 }, partnerAccessToken);
+        setSupportTickets(response.tickets || []);
+      }
+    } catch (error) {
+      setSupportError(error.message || 'Failed to submit support request.');
+    } finally {
+      setSupportSubmitting(false);
+    }
+  };
 
   const handleSearch = () => {
     if (!inputId.trim()) return;
@@ -814,6 +925,116 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
 
             {/* City risk profile */}
             <RiskProfileCard city={partner.primaryDeliveryCity} />
+
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>Customer Support</div>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Raise requests and track response status from your dashboard.</div>
+                </div>
+                <span className="badge badge-info">Partner Support</span>
+              </div>
+
+              {supportError && <div className="alert alert-error" style={{ marginBottom: '0.75rem' }}>{supportError}</div>}
+              {supportInfo && <div className="alert alert-success" style={{ marginBottom: '0.75rem' }}>{supportInfo}</div>}
+
+              <div className="form-grid" style={{ marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Category</label>
+                  <select
+                    className="form-select"
+                    value={supportForm.issueCategory}
+                    onChange={(event) => handleSupportFormChange('issueCategory', event.target.value)}
+                  >
+                    {SUPPORT_CATEGORY_OPTIONS.filter((option) => option.value !== 'all').map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Mobile Number</label>
+                  <input
+                    className="form-input"
+                    value={supportForm.mobilePhoneNumber}
+                    onChange={(event) => handleSupportFormChange('mobilePhoneNumber', event.target.value)}
+                    placeholder={partner.mobilePhoneNumber || 'Optional'}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                <label className="form-label">Subject</label>
+                <input
+                  className="form-input"
+                  value={supportForm.subject}
+                  onChange={(event) => handleSupportFormChange('subject', event.target.value)}
+                  placeholder="Briefly describe the issue"
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '0.9rem' }}>
+                <label className="form-label">Message</label>
+                <textarea
+                  className="form-input"
+                  rows={4}
+                  value={supportForm.message}
+                  onChange={(event) => handleSupportFormChange('message', event.target.value)}
+                  placeholder="Tell us what happened and how we can help"
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Stored in MongoDB for follow-up by support staff.</div>
+                <button className="btn btn-primary btn-sm" onClick={handleSupportRequestSubmit} disabled={supportSubmitting}>
+                  {supportSubmitting ? 'Submitting...' : 'Submit Support Request'}
+                </button>
+              </div>
+
+              <div style={{ marginTop: '1.25rem' }}>
+                <div style={{ fontWeight: 700, marginBottom: '0.75rem' }}>My Recent Tickets</div>
+                {supportLoading ? (
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Loading support tickets...</div>
+                ) : supportTickets.length === 0 ? (
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No support tickets yet.</div>
+                ) : (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Subject</th>
+                          <th>Category</th>
+                          <th>Status</th>
+                          <th>Created</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {supportTickets.map((ticket) => (
+                          <tr key={ticket._id}>
+                            <td>
+                              <div className="td-name">{ticket.subject}</div>
+                              <div className="td-sub">{ticket.message}</div>
+                            </td>
+                            <td style={{ textTransform: 'capitalize' }}>
+                              {SUPPORT_CATEGORY_OPTIONS.find((option) => option.value === ticket.issueCategory)?.label || ticket.issueCategory}
+                            </td>
+                            <td>
+                              <span className={`badge ${ticket.ticketStatus === 'resolved' || ticket.ticketStatus === 'closed' ? 'badge-approved' : ticket.ticketStatus === 'in_progress' ? 'badge-active' : 'badge-pending'}`}>
+                                <span className="badge-dot" />
+                                {SUPPORT_STATUS_VALUE_TO_LABEL[ticket.ticketStatus] || String(ticket.ticketStatus || 'open').replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                            <td style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+                              {ticket.createdAt ? new Date(ticket.createdAt).toLocaleString('en-IN') : 'N/A'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
 
             <DisruptionMap
               partnerCoordinates={partner.primaryDeliveryZoneCoordinates}

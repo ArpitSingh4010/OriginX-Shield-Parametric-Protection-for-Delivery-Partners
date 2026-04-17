@@ -130,4 +130,60 @@ customerSupportRouter.get('/tickets', authenticateRequestToken, requireAdminRole
   }
 });
 
+customerSupportRouter.get('/my-tickets', authenticateRequestToken, async (request, response) => {
+  try {
+    if (!request.authenticatedUser || request.authenticatedUser.role !== 'partner') {
+      return response.status(403).json({
+        success: false,
+        message: 'Partner role is required for this action.',
+      });
+    }
+
+    const partnerId = String(request.authenticatedUser.sub || '').trim();
+    if (!partnerId || !mongoose.isValidObjectId(partnerId)) {
+      return response.status(400).json({
+        success: false,
+        message: 'Valid partner identity is required.',
+      });
+    }
+
+    const { status, category, page = 1, limit = 10 } = request.query;
+
+    const query = { deliveryPartnerId: partnerId };
+    if (status && SUPPORT_STATUSES.includes(String(status))) {
+      query.ticketStatus = String(status);
+    }
+    if (category && SUPPORT_CATEGORIES.includes(String(category))) {
+      query.issueCategory = String(category);
+    }
+
+    const pageNumber = Math.max(1, Number.parseInt(page, 10) || 1);
+    const pageSize = Math.min(50, Math.max(1, Number.parseInt(limit, 10) || 10));
+    const skip = (pageNumber - 1) * pageSize;
+
+    const [tickets, totalCount] = await Promise.all([
+      CustomerSupportTicket.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(pageSize)
+        .select('-__v'),
+      CustomerSupportTicket.countDocuments(query),
+    ]);
+
+    return response.status(200).json({
+      success: true,
+      page: pageNumber,
+      limit: pageSize,
+      totalCount,
+      tickets,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      success: false,
+      message: 'Failed to retrieve your support tickets. Please try again later.',
+      errorDetails: error.message,
+    });
+  }
+});
+
 module.exports = customerSupportRouter;

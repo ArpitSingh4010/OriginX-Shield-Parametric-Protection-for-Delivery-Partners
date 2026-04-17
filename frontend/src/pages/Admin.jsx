@@ -4,6 +4,12 @@ import {
   triggerWeatherCheck, createDisruptionEvent, listPartners, triggerClaimsForEvent,
   addAdminUser, listAdminUsers, removePartner, getAdminStats, getAiModelInfo, seedDemoData, listSupportTickets,
 } from '../api/rakshaRideApi';
+import {
+  SUPPORT_CATEGORY_OPTIONS,
+  SUPPORT_CATEGORY_VALUE_TO_LABEL,
+  SUPPORT_STATUS_OPTIONS,
+  SUPPORT_STATUS_VALUE_TO_LABEL,
+} from '../constants/support';
 import StatusBadge from '../components/StatusBadge';
 import DisruptionMap from '../components/DisruptionMap';
 
@@ -157,24 +163,6 @@ function ClaimsSplitPie({ claimsByStatus = {} }) {
 }
 
 export default function Admin({ adminAccessToken, adminProfile, onAdminLogout }) {
-  const SUPPORT_STATUS_OPTIONS = [
-    { value: 'all', label: 'All Statuses' },
-    { value: 'open', label: 'Open' },
-    { value: 'in_progress', label: 'In Progress' },
-    { value: 'resolved', label: 'Resolved' },
-    { value: 'closed', label: 'Closed' },
-  ];
-
-  const SUPPORT_CATEGORY_OPTIONS = [
-    { value: 'all', label: 'All Categories' },
-    { value: 'general', label: 'General' },
-    { value: 'claims', label: 'Claims' },
-    { value: 'policy', label: 'Policy' },
-    { value: 'payment', label: 'Payment' },
-    { value: 'technical', label: 'Technical' },
-    { value: 'account', label: 'Account' },
-  ];
-
   const DISRUPTION_TYPE_OPTIONS = [
     { value: 'heavy_rainfall', label: 'Heavy Rainfall' },
     { value: 'extreme_heat', label: 'Extreme Heat' },
@@ -1113,7 +1101,7 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
                           <div>{ticket.emailAddress || 'N/A'}</div>
                           <div className="td-sub">{ticket.mobilePhoneNumber || 'No phone'}</div>
                         </td>
-                        <td style={{ textTransform: 'capitalize' }}>{String(ticket.issueCategory || 'general').replace(/_/g, ' ')}</td>
+                        <td style={{ textTransform: 'capitalize' }}>{SUPPORT_CATEGORY_VALUE_TO_LABEL[ticket.issueCategory] || String(ticket.issueCategory || 'general').replace(/_/g, ' ')}</td>
                         <td>
                           <div className="td-name">{ticket.subject || 'No subject'}</div>
                           <div className="td-sub" style={{ maxWidth: 280, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1123,7 +1111,7 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
                         <td>
                           <span className={`badge ${ticket.ticketStatus === 'resolved' || ticket.ticketStatus === 'closed' ? 'badge-approved' : ticket.ticketStatus === 'in_progress' ? 'badge-active' : 'badge-pending'}`}>
                             <span className="badge-dot" />
-                            {String(ticket.ticketStatus || 'open').replace(/_/g, ' ')}
+                            {SUPPORT_STATUS_VALUE_TO_LABEL[ticket.ticketStatus] || String(ticket.ticketStatus || 'open').replace(/_/g, ' ')}
                           </span>
                         </td>
                         <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>

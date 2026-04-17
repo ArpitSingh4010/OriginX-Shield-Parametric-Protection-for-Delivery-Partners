@@ -216,6 +216,11 @@ Admin panel exists for judge/demo operations:
 - admin login email: `verdhanchiku@gmail.com`
 - admin login password: `pass321`
 
+### Admin Page Credentials
+
+- Mail: `guidewire@gmail.com`
+- Password: `guide123`
+
 
 ## Payment Mode 
 
