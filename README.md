@@ -425,7 +425,7 @@ npm run build
 ## Demo Assets
 
 - Website: https://raksha-ride.vercel.app/
-- Demo video:https://youtu.be/fXFalfp_7NA?si=Xr1wwxWuCuQ--4ba
+- Demo video:https://youtu.be/UCE6xzRXyTQ
 - Architecture diagram: https://github.com/user-attachments/assets/9107d99c-d7ef-4b40-bc98-940dc99d9e12
 - Workflow diagram: https://github.com/user-attachments/assets/97824b2b-dddb-4aa1-9db9-ee80a4e600ad
 ## Pitch Deck
