@@ -428,3 +428,5 @@ npm run build
 - Demo video:https://youtu.be/fXFalfp_7NA?si=Xr1wwxWuCuQ--4ba
 - Architecture diagram: https://github.com/user-attachments/assets/9107d99c-d7ef-4b40-bc98-940dc99d9e12
 - Workflow diagram: https://github.com/user-attachments/assets/97824b2b-dddb-4aa1-9db9-ee80a4e600ad
+## Pitch Deck
+- Pitch Deck Link : https://drive.google.com/file/d/1D0KQAHumvD5_dgiP9fhFcILheP2JelX2/view?usp=sharing
