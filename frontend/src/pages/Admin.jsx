@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   getFlaggedClaims, reviewClaim, listDisruptionEvents,
   triggerWeatherCheck, createDisruptionEvent, listPartners, triggerClaimsForEvent,
-  addAdminUser, listAdminUsers, removePartner, getAdminStats, getAiModelInfo, seedDemoData,
+  addAdminUser, listAdminUsers, removePartner, getAdminStats, getAiModelInfo, seedDemoData, listSupportTickets,
 } from '../api/rakshaRideApi';
 import StatusBadge from '../components/StatusBadge';
 import DisruptionMap from '../components/DisruptionMap';
@@ -157,6 +157,24 @@ function ClaimsSplitPie({ claimsByStatus = {} }) {
 }
 
 export default function Admin({ adminAccessToken, adminProfile, onAdminLogout }) {
+  const SUPPORT_STATUS_OPTIONS = [
+    { value: 'all', label: 'All Statuses' },
+    { value: 'open', label: 'Open' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'resolved', label: 'Resolved' },
+    { value: 'closed', label: 'Closed' },
+  ];
+
+  const SUPPORT_CATEGORY_OPTIONS = [
+    { value: 'all', label: 'All Categories' },
+    { value: 'general', label: 'General' },
+    { value: 'claims', label: 'Claims' },
+    { value: 'policy', label: 'Policy' },
+    { value: 'payment', label: 'Payment' },
+    { value: 'technical', label: 'Technical' },
+    { value: 'account', label: 'Account' },
+  ];
+
   const DISRUPTION_TYPE_OPTIONS = [
     { value: 'heavy_rainfall', label: 'Heavy Rainfall' },
     { value: 'extreme_heat', label: 'Extreme Heat' },
@@ -188,6 +206,8 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
   const [modelInfo, setModelInfo] = useState(null);
   const [modelInfoError, setModelInfoError] = useState('');
   const [adminUsers, setAdminUsers] = useState([]);
+  const [supportTickets, setSupportTickets] = useState([]);
+  const [supportFilters, setSupportFilters] = useState({ status: 'all', category: 'all' });
   const [newAdmin, setNewAdmin] = useState({ fullName: '', emailAddress: '', password: '' });
   const [creatingAdmin, setCreatingAdmin] = useState(false);
   const [removingPartnerId, setRemovingPartnerId] = useState('');
@@ -240,11 +260,12 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
     setLoading(true);
     setModelInfoError('');
     try {
-      const [f, e, p, adminList] = await Promise.allSettled([
+      const [f, e, p, adminList, supportList] = await Promise.allSettled([
         getFlaggedClaims({ limit: 50 }, adminAccessToken),
         listDisruptionEvents({ limit: 30 }),
         listPartners({ limit: 100 }),
         listAdminUsers(adminAccessToken),
+        listSupportTickets({ limit: 100 }, adminAccessToken),
       ]);
       const statsResponse = await getAdminStats(adminAccessToken)
         .then((response) => ({ status: 'fulfilled', value: response }))
@@ -262,6 +283,9 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
       if (adminList.status === 'fulfilled') {
         setAdminUsers(adminList.value.adminUsers || []);
       }
+      if (supportList.status === 'fulfilled') {
+        setSupportTickets(supportList.value.tickets || []);
+      }
       if (statsResponse.status === 'fulfilled') {
         setAdminStats(statsResponse.value.stats || null);
       }
@@ -278,7 +302,7 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
         );
       }
 
-      const failedResponses = [f, e, p, adminList, statsResponse].filter((response) => response.status === 'rejected');
+      const failedResponses = [f, e, p, adminList, supportList, statsResponse].filter((response) => response.status === 'rejected');
       if (failedResponses.length > 0) {
         const combinedErrorMessage = failedResponses
           .map((response) => response.reason?.message)
@@ -501,9 +525,16 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
     { id: 'claims',  label: `Flagged Claims (${flagged.length})` },
     { id: 'events',  label: `Disruption Events (${events.length})` },
     { id: 'partners', label: `Partners (${partners.length})` },
+    { id: 'support', label: `Support (${supportTickets.length})` },
     { id: 'weather', label: ' Weather Monitor' },
     { id: 'admins', label: `Admins (${adminUsers.length})` },
   ];
+
+  const filteredSupportTickets = supportTickets.filter((ticket) => {
+    const statusMatches = supportFilters.status === 'all' || ticket.ticketStatus === supportFilters.status;
+    const categoryMatches = supportFilters.category === 'all' || ticket.issueCategory === supportFilters.category;
+    return statusMatches && categoryMatches;
+  });
 
   return (
     <div className="page">
@@ -996,6 +1027,107 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
                           >
                             {removingPartnerId === partner._id ? 'Removing...' : 'Remove'}
                           </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && tab === 'support' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+              <div style={{ fontWeight: 700 }}>Customer Support Tickets</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                Requests submitted from the public support form and stored in MongoDB.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Status</label>
+                  <select
+                    className="form-select"
+                    value={supportFilters.status}
+                    onChange={(event) => setSupportFilters((previousFilters) => ({
+                      ...previousFilters,
+                      status: event.target.value,
+                    }))}
+                  >
+                    {SUPPORT_STATUS_OPTIONS.map((statusOption) => (
+                      <option key={statusOption.value} value={statusOption.value}>{statusOption.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Category</label>
+                  <select
+                    className="form-select"
+                    value={supportFilters.category}
+                    onChange={(event) => setSupportFilters((previousFilters) => ({
+                      ...previousFilters,
+                      category: event.target.value,
+                    }))}
+                  >
+                    {SUPPORT_CATEGORY_OPTIONS.map((categoryOption) => (
+                      <option key={categoryOption.value} value={categoryOption.value}>{categoryOption.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <button className="btn btn-secondary" onClick={loadData}>
+                    Refresh Tickets
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {filteredSupportTickets.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon"></div>
+                <div className="empty-title">No support tickets found</div>
+                <div className="empty-sub">Try changing filters or refresh ticket data.</div>
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Requester</th>
+                      <th>Contact</th>
+                      <th>Category</th>
+                      <th>Subject</th>
+                      <th>Status</th>
+                      <th>Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSupportTickets.map((ticket) => (
+                      <tr key={ticket._id}>
+                        <td>
+                          <div className="td-name">{ticket.fullName || 'N/A'}</div>
+                          <div className="td-sub">{ticket.deliveryPartnerId?._id ? `Partner: ${ticket.deliveryPartnerId._id}` : 'Guest request'}</div>
+                        </td>
+                        <td>
+                          <div>{ticket.emailAddress || 'N/A'}</div>
+                          <div className="td-sub">{ticket.mobilePhoneNumber || 'No phone'}</div>
+                        </td>
+                        <td style={{ textTransform: 'capitalize' }}>{String(ticket.issueCategory || 'general').replace(/_/g, ' ')}</td>
+                        <td>
+                          <div className="td-name">{ticket.subject || 'No subject'}</div>
+                          <div className="td-sub" style={{ maxWidth: 280, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {ticket.message || 'No message'}
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`badge ${ticket.ticketStatus === 'resolved' || ticket.ticketStatus === 'closed' ? 'badge-approved' : ticket.ticketStatus === 'in_progress' ? 'badge-active' : 'badge-pending'}`}>
+                            <span className="badge-dot" />
+                            {String(ticket.ticketStatus || 'open').replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                          {ticket.createdAt ? new Date(ticket.createdAt).toLocaleString('en-IN') : 'N/A'}
                         </td>
                       </tr>
                     ))}

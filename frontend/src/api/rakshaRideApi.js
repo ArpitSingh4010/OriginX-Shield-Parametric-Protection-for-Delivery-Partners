@@ -141,6 +141,16 @@ export const addAdminUser        = (body, adminAccessToken) => request(`${BASE}/
   body: JSON.stringify(body),
 });
 
+// ----- Customer Support ------------------------------------------------------
+export const submitSupportTicket = (body) => request(`${BASE}/customer-support/submit`, {
+  method: 'POST',
+  body: JSON.stringify(body),
+});
+export const listSupportTickets = (params = {}, adminAccessToken) => request(`${BASE}/customer-support/tickets?${new URLSearchParams(params)}`, {
+  method: 'GET',
+  headers: createAdminAuthHeaders(adminAccessToken),
+});
+
 // ----- Python AI -------------------------------------------------------------
 export const aiQuickRiskAssess   = (body) => request(`${AI}/quick-risk-assess`, { method: 'POST', body: JSON.stringify(body) });
 export const aiAssessRisk        = (body) => request(`${AI}/assess-risk`,       { method: 'POST', body: JSON.stringify(body) });

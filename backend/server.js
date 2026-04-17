@@ -1,5 +1,5 @@
 ﻿/**
- * Main Express application entry point for the GigShield backend.
+ * Main Express application entry point for the RakshaRide backend.
  *
  * Initialises middleware, registers API route handlers, starts
  * weather monitoring, and begins listening for HTTP requests.
@@ -28,6 +28,7 @@ const insurancePolicyRouter = require('./routes/insurancePolicyRoutes');
 const insuranceClaimRouter  = require('./routes/insuranceClaimRoutes');
 const disruptionEventRouter = require('./routes/disruptionEventRoutes');
 const authRouter = require('./routes/authRoutes');
+const customerSupportRouter = require('./routes/customerSupportRoutes');
 
 const HTTP_SERVER_PORT = Number(process.env.PORT || '5000');
 const FRONTEND_URL = process.env.FRONTEND_URL;
@@ -93,6 +94,7 @@ expressApplication.use('/api/insurance-policies', insurancePolicyRouter);
 expressApplication.use('/api/insurance-claims',   insuranceClaimRouter);
 expressApplication.use('/api/disruption-events',  disruptionEventRouter);
 expressApplication.use('/api/auth',               authRouter);
+expressApplication.use('/api/customer-support',   customerSupportRouter);
 
 expressApplication.get('/api/alerts/stream', async (request, response) => {
   const partnerId = String(request.query.partnerId || '').trim();

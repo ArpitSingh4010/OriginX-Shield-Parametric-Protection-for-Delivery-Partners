@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { healthCheck } from '../api/rakshaRideApi';
+import { healthCheck, submitSupportTicket } from '../api/rakshaRideApi';
 
 const PLANS = [
   { tier: 'basic',    premium: 25,  coverage: 300,  badge: '🛡️', popular: false },
@@ -27,17 +27,82 @@ const STATS = [
   { value: '< 1s',  label: 'Claim processing time' },
 ];
 
+const SUPPORT_CATEGORIES = [
+  { value: 'general', label: 'General' },
+  { value: 'claims', label: 'Claim Issue' },
+  { value: 'policy', label: 'Policy Help' },
+  { value: 'payment', label: 'Payment/Payout' },
+  { value: 'technical', label: 'Technical' },
+  { value: 'account', label: 'Account' },
+];
+
 const formatInr = (amount) => `₹${Number(amount || 0).toLocaleString('en-IN')}`;
 
 export default function Landing() {
   const navigate = useNavigate();
   const [serverOk, setServerOk] = useState(null);
+  const [supportLoading, setSupportLoading] = useState(false);
+  const [supportError, setSupportError] = useState('');
+  const [supportSuccess, setSupportSuccess] = useState('');
+  const [supportForm, setSupportForm] = useState({
+    fullName: '',
+    emailAddress: '',
+    mobilePhoneNumber: '',
+    deliveryPartnerId: '',
+    issueCategory: 'general',
+    subject: '',
+    message: '',
+  });
 
   useEffect(() => {
     healthCheck()
       .then(() => setServerOk(true))
       .catch(() => setServerOk(false));
   }, []);
+
+  const handleSupportChange = (fieldName, fieldValue) => {
+    setSupportForm((previousForm) => ({
+      ...previousForm,
+      [fieldName]: fieldValue,
+    }));
+  };
+
+  const handleSupportSubmit = async (event) => {
+    event.preventDefault();
+    setSupportError('');
+    setSupportSuccess('');
+
+    if (!supportForm.fullName.trim() || !supportForm.emailAddress.trim() || !supportForm.subject.trim() || !supportForm.message.trim()) {
+      setSupportError('Please fill full name, email, subject and message.');
+      return;
+    }
+
+    setSupportLoading(true);
+    try {
+      const submissionPayload = {
+        fullName: supportForm.fullName.trim(),
+        emailAddress: supportForm.emailAddress.trim(),
+        mobilePhoneNumber: supportForm.mobilePhoneNumber.trim(),
+        deliveryPartnerId: supportForm.deliveryPartnerId.trim(),
+        issueCategory: supportForm.issueCategory,
+        subject: supportForm.subject.trim(),
+        message: supportForm.message.trim(),
+      };
+
+      await submitSupportTicket(submissionPayload);
+
+      setSupportSuccess('Support request submitted. Our team will reach out soon.');
+      setSupportForm((previousForm) => ({
+        ...previousForm,
+        subject: '',
+        message: '',
+      }));
+    } catch (error) {
+      setSupportError(error.message || 'Failed to submit support request.');
+    } finally {
+      setSupportLoading(false);
+    }
+  };
 
   return (
     <div className="page">
@@ -284,6 +349,104 @@ export default function Landing() {
       </section>
 
       {/*  CTA  */}
+      <section className="section" style={{ borderTop: '1px solid var(--border)' }}>
+        <div className="container" style={{ maxWidth: 900 }}>
+          <div className="section-header center">
+            <div className="tag">Customer Support</div>
+            <h2 className="section-title">Need help? Talk to RakshaRide support</h2>
+            <p className="section-sub">Your request is stored in our MongoDB support queue for quick follow-up.</p>
+          </div>
+
+          <form className="card" onSubmit={handleSupportSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {supportError && <div className="alert alert-error">{supportError}</div>}
+            {supportSuccess && <div className="alert alert-success">{supportSuccess}</div>}
+
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">Full Name</label>
+                <input
+                  className="form-input"
+                  value={supportForm.fullName}
+                  onChange={(event) => handleSupportChange('fullName', event.target.value)}
+                  placeholder="Your name"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Email Address</label>
+                <input
+                  className="form-input"
+                  type="email"
+                  value={supportForm.emailAddress}
+                  onChange={(event) => handleSupportChange('emailAddress', event.target.value)}
+                  placeholder="you@example.com"
+                />
+              </div>
+            </div>
+
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">Mobile Number (Optional)</label>
+                <input
+                  className="form-input"
+                  value={supportForm.mobilePhoneNumber}
+                  onChange={(event) => handleSupportChange('mobilePhoneNumber', event.target.value)}
+                  placeholder="9876543210"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Delivery Partner ID (Optional)</label>
+                <input
+                  className="form-input"
+                  value={supportForm.deliveryPartnerId}
+                  onChange={(event) => handleSupportChange('deliveryPartnerId', event.target.value)}
+                  placeholder="Mongo ObjectId"
+                />
+              </div>
+            </div>
+
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">Issue Category</label>
+                <select
+                  className="form-select"
+                  value={supportForm.issueCategory}
+                  onChange={(event) => handleSupportChange('issueCategory', event.target.value)}
+                >
+                  {SUPPORT_CATEGORIES.map((category) => (
+                    <option key={category.value} value={category.value}>{category.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Subject</label>
+                <input
+                  className="form-input"
+                  value={supportForm.subject}
+                  onChange={(event) => handleSupportChange('subject', event.target.value)}
+                  placeholder="What do you need help with?"
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Message</label>
+              <textarea
+                className="form-input"
+                value={supportForm.message}
+                onChange={(event) => handleSupportChange('message', event.target.value)}
+                placeholder="Describe your issue"
+                rows={5}
+                style={{ resize: 'vertical' }}
+              />
+            </div>
+
+            <button className="btn btn-primary" type="submit" disabled={supportLoading} style={{ alignSelf: 'flex-start' }}>
+              {supportLoading ? 'Submitting...' : 'Submit Support Request'}
+            </button>
+          </form>
+        </div>
+      </section>
+
       <section className="section" style={{
         background: 'radial-gradient(ellipse 70% 80% at 50% 50%, rgba(245,158,11,0.08) 0%, transparent 70%)',
         textAlign: 'center',
