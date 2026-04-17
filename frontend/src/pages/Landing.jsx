@@ -55,9 +55,13 @@ export default function Landing() {
   });
 
   useEffect(() => {
-    healthCheck()
-      .then(() => setServerOk(true))
-      .catch(() => setServerOk(false));
+    // Defer health check to after page is interactive
+    const timerId = setTimeout(() => {
+      healthCheck()
+        .then(() => setServerOk(true))
+        .catch(() => setServerOk(false));
+    }, 2000);
+    return () => clearTimeout(timerId);
   }, []);
 
   const handleSupportChange = (fieldName, fieldValue) => {

@@ -248,47 +248,47 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
     setLoading(true);
     setModelInfoError('');
     try {
-      const [f, e, p, adminList, supportList] = await Promise.allSettled([
-        getFlaggedClaims({ limit: 50 }, adminAccessToken),
-        listDisruptionEvents({ limit: 30 }),
-        listPartners({ limit: 100 }),
-        listAdminUsers(adminAccessToken),
-        listSupportTickets({ limit: 100 }, adminAccessToken),
+      // Load only critical data first (flagged claims, stats)
+      const [f, statsResponse] = await Promise.all([
+        getFlaggedClaims({ limit: 50 }, adminAccessToken)
+          .then((res) => ({ status: 'fulfilled', value: res }))
+          .catch((err) => ({ status: 'rejected', reason: err })),
+        getAdminStats(adminAccessToken)
+          .then((response) => ({ status: 'fulfilled', value: response }))
+          .catch((error) => ({ status: 'rejected', reason: error })),
       ]);
-      const statsResponse = await getAdminStats(adminAccessToken)
-        .then((response) => ({ status: 'fulfilled', value: response }))
-        .catch((error) => ({ status: 'rejected', reason: error }));
 
       if (f.status === 'fulfilled') {
         setFlagged(f.value.flaggedClaims || []);
-      }
-      if (e.status === 'fulfilled') {
-        setEvents(e.value.disruptionEvents || []);
-      }
-      if (p.status === 'fulfilled') {
-        setPartners(p.value.deliveryPartners || []);
-      }
-      if (adminList.status === 'fulfilled') {
-        setAdminUsers(adminList.value.adminUsers || []);
-      }
-      if (supportList.status === 'fulfilled') {
-        setSupportTickets(supportList.value.tickets || []);
       }
       if (statsResponse.status === 'fulfilled') {
         setAdminStats(statsResponse.value.stats || null);
       }
 
-      try {
-        const aiModelResponse = await getAiModelInfo();
-        setModelInfo(aiModelResponse || null);
-      } catch (error) {
-        setModelInfo(null);
-        setModelInfoError(
-          error?.name === 'TypeError'
-            ? 'AI model metadata is unavailable. Check VITE_AI_BASE_URL or the AI service deployment.'
-            : (error.message || 'AI model metadata is unavailable.')
-        );
-      }
+      // Defer non-critical data to background (events, partners, admin users, support tickets, AI model info)
+      Promise.allSettled([
+        listDisruptionEvents({ limit: 30 }),
+        listPartners({ limit: 100 }),
+        listAdminUsers(adminAccessToken),
+        listSupportTickets({ limit: 100 }, adminAccessToken),
+      ]).then(([e, p, adminList, supportList]) => {
+        if (e.status === 'fulfilled') setEvents(e.value.disruptionEvents || []);
+        if (p.status === 'fulfilled') setPartners(p.value.deliveryPartners || []);
+        if (adminList.status === 'fulfilled') setAdminUsers(adminList.value.adminUsers || []);
+        if (supportList.status === 'fulfilled') setSupportTickets(supportList.value.tickets || []);
+      });
+
+      // Defer AI model info to non-blocking background task
+      getAiModelInfo()
+        .then((aiModelResponse) => setModelInfo(aiModelResponse || null))
+        .catch((error) => {
+          setModelInfo(null);
+          setModelInfoError(
+            error?.name === 'TypeError'
+              ? 'AI model metadata is unavailable. Check VITE_AI_BASE_URL or the AI service deployment.'
+              : (error.message || 'AI model metadata is unavailable.')
+          );
+        });
 
       const failedResponses = [f, e, p, adminList, supportList, statsResponse].filter((response) => response.status === 'rejected');
       if (failedResponses.length > 0) {

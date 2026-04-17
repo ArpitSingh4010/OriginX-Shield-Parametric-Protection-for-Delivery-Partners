@@ -467,10 +467,10 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
     if (!id) return;
     setLoading(true); setError(''); setPartner(null); setClaims([]);
     try {
-      const [partRes, claimRes, eventsRes, earningsRes] = await Promise.allSettled([
+      // Load critical data first (partner, claims, earnings)
+      const [partRes, claimRes, earningsRes] = await Promise.allSettled([
         getPartner(id),
         getPartnerClaims(id, { limit: 50 }),
-        listDisruptionEvents({ limit: 40 }),
         getPartnerEarningsSummary(id),
       ]);
       if (partRes.status !== 'fulfilled') {
@@ -479,9 +479,14 @@ export default function Dashboard({ authenticatedPartnerId = '', authenticatedPa
 
       setPartner(partRes.value.deliveryPartner);
       setClaims(claimRes.status === 'fulfilled' ? (claimRes.value.claims || []) : []);
-      setEvents(eventsRes.status === 'fulfilled' ? (eventsRes.value.disruptionEvents || []) : []);
       setEarningsTrend(earningsRes.status === 'fulfilled' ? (earningsRes.value.trend || []) : []);
       setEarningsSummary(earningsRes.status === 'fulfilled' ? (earningsRes.value.summary || null) : null);
+
+      // Defer disruption events to background (less critical for initial render)
+      listDisruptionEvents({ limit: 40 }).then(
+        (res) => setEvents(res.disruptionEvents || []),
+        () => setEvents([])
+      );
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   }, []);
