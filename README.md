@@ -421,6 +421,11 @@ npm test
 cd frontend
 npm run build
 ```
+## Admin Page Credentials 
+```bash
+Mail - verdhanchiku@gmail.com
+Password - pass321
+```
 
 ## Demo Assets
 
