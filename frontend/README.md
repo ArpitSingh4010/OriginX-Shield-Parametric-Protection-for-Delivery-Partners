@@ -42,4 +42,5 @@ npm run preview
   - `VITE_AI_BASE_URL`
   - `VITE_RAZORPAY_KEY_ID`
   - `VITE_ADMIN_ACCESS_KEY`
+- If the frontend is deployed separately from the backend, `VITE_API_BASE_URL` must be an absolute backend URL, not `/api`.
 

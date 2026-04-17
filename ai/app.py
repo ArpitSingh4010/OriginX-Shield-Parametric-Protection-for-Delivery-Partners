@@ -19,6 +19,7 @@ Start with:
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import sys, os, traceback, json, subprocess
+import re
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
@@ -36,8 +37,18 @@ from anomaly_detector import (
 )
 
 app = Flask(__name__)
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
-CORS(app, origins=[FRONTEND_URL])
+FRONTEND_URLS = [
+    origin.strip()
+    for origin in os.environ.get('FRONTEND_URL', 'http://localhost:5173').split(',')
+    if origin.strip()
+]
+ALLOWED_ORIGIN_PATTERNS = [
+    *FRONTEND_URLS,
+    re.compile(r'^https://.*\.vercel\.app$'),
+    re.compile(r'^https://.*\.netlify\.app$'),
+    re.compile(r'^https://.*\.onrender\.com$'),
+]
+CORS(app, origins=ALLOWED_ORIGIN_PATTERNS)
 
 AI_SERVICE_PORT          = int(os.environ.get('AI_SERVICE_PORT', '5001'))
 AI_SERVICE_HOST          = os.environ.get('AI_SERVICE_HOST', '0.0.0.0')

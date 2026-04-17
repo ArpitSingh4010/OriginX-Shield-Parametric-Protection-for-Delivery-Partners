@@ -312,6 +312,35 @@ cp .env.example .env
 npm run dev
 ```
 
+## Deployment Configuration
+
+### Local Development (Same-Machine)
+
+For local development with all services on localhost:
+
+- Frontend: `VITE_API_BASE_URL=/api`, `VITE_AI_BASE_URL=/ai` (relative paths via proxy)
+- Backend: `FRONTEND_URL=http://localhost:5173`, `AI_SERVICE_URL=http://localhost:5001`
+- AI Service: `FRONTEND_URL=http://localhost:5173`
+
+### Separate Deployment (Different Hosts)
+
+When frontend, backend, and AI are deployed on different hosts (e.g., Vercel, Netlify, Render):
+
+- Frontend: Set `VITE_API_BASE_URL` to full backend URL (e.g., `https://api.example.com`), `VITE_AI_BASE_URL` to full AI service URL
+- Backend: `FRONTEND_URL=https://frontend-domain.com` (will auto-accept Vercel, Netlify, Render domains)
+- AI Service: `FRONTEND_URL=https://frontend-domain.com` (CORS patterns auto-configured for major platforms)
+
+The backend and AI service automatically accept requests from:
+- Configured `FRONTEND_URL`
+- Vercel deployments (`*.vercel.app`)
+- Netlify deployments (`*.netlify.app`)
+- Render deployments (`*.onrender.com`)
+
+### Current Deployments
+
+- **Frontend**: https://raksha-ride.vercel.app/
+- **AI Service**: https://origin-x-shield-parametric-protecti-five.vercel.app/
+
 ## Environment Variables
 
 ### Backend (`backend/.env`)
@@ -323,6 +352,8 @@ npm run dev
 - `ENFORCE_AUTH`
 - `AUTH_DEMO_USERNAME`
 - `AUTH_DEMO_PASSWORD_HASH` or `AUTH_DEMO_PASSWORD`
+- `FRONTEND_URL` - single URL or comma-separated list for CORS allowlist
+- `AI_SERVICE_URL` - URL for internal AI service calls
 - `WEATHER_API_KEY`
 - `POLLUTION_API_KEY`
 - `WEATHER_API_BASE_URL`
@@ -335,10 +366,16 @@ npm run dev
 
 ### Frontend (`frontend/.env`)
 
-- `VITE_API_BASE_URL`
-- `VITE_AI_BASE_URL`
+- `VITE_API_BASE_URL` - `/api` for local proxy or full backend URL for separate deployment
+- `VITE_AI_BASE_URL` - `/ai` for local proxy or full AI service URL for separate deployment
 - `VITE_RAZORPAY_KEY_ID`
 - `VITE_ADMIN_ACCESS_KEY`
+
+### AI Service (`ai/.env`)
+
+- `FRONTEND_URL` - single URL or comma-separated list of frontend origins
+- `AI_SERVICE_PUBLIC_BASE_URL` - public URL for frontend to reach AI service
+- `PORT` - service port (default 5001)
 
 ## API Quick Reference
 

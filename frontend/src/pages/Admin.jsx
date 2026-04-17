@@ -186,6 +186,7 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
   const [weatherResult,  setWeatherResult]  = useState(null);
   const [adminStats, setAdminStats] = useState(null);
   const [modelInfo, setModelInfo] = useState(null);
+  const [modelInfoError, setModelInfoError] = useState('');
   const [adminUsers, setAdminUsers] = useState([]);
   const [newAdmin, setNewAdmin] = useState({ fullName: '', emailAddress: '', password: '' });
   const [creatingAdmin, setCreatingAdmin] = useState(false);
@@ -237,6 +238,7 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setModelInfoError('');
     try {
       const [f, e, p, adminList] = await Promise.allSettled([
         getFlaggedClaims({ limit: 50 }, adminAccessToken),
@@ -244,10 +246,9 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
         listPartners({ limit: 100 }),
         listAdminUsers(adminAccessToken),
       ]);
-      const [statsResponse, modelResponse] = await Promise.allSettled([
-        getAdminStats(adminAccessToken),
-        getAiModelInfo(),
-      ]);
+      const statsResponse = await getAdminStats(adminAccessToken)
+        .then((response) => ({ status: 'fulfilled', value: response }))
+        .catch((error) => ({ status: 'rejected', reason: error }));
 
       if (f.status === 'fulfilled') {
         setFlagged(f.value.flaggedClaims || []);
@@ -264,11 +265,20 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
       if (statsResponse.status === 'fulfilled') {
         setAdminStats(statsResponse.value.stats || null);
       }
-      if (modelResponse.status === 'fulfilled') {
-        setModelInfo(modelResponse.value || null);
+
+      try {
+        const aiModelResponse = await getAiModelInfo();
+        setModelInfo(aiModelResponse || null);
+      } catch (error) {
+        setModelInfo(null);
+        setModelInfoError(
+          error?.name === 'TypeError'
+            ? 'AI model metadata is unavailable. Check VITE_AI_BASE_URL or the AI service deployment.'
+            : (error.message || 'AI model metadata is unavailable.')
+        );
       }
 
-      const failedResponses = [f, e, p, adminList, statsResponse, modelResponse].filter((response) => response.status === 'rejected');
+      const failedResponses = [f, e, p, adminList, statsResponse].filter((response) => response.status === 'rejected');
       if (failedResponses.length > 0) {
         const combinedErrorMessage = failedResponses
           .map((response) => response.reason?.message)
@@ -279,6 +289,12 @@ export default function Admin({ adminAccessToken, adminProfile, onAdminLogout })
           handleSessionExpiry(combinedErrorMessage);
           return;
         }
+
+        {modelInfoError && (
+          <div className="alert alert-warning" style={{ marginBottom: '1rem' }}>
+            {modelInfoError}
+          </div>
+        )}
 
         showToast(`Some data failed to load: ${combinedErrorMessage || 'Unknown error.'}`);
       }

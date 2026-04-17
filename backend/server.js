@@ -35,13 +35,14 @@ const FRONTEND_URLS = (FRONTEND_URL || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+const ALLOWED_FRONTEND_HOST_SUFFIXES = ['.vercel.app', '.netlify.app', '.onrender.com'];
 
 const expressApplication = express();
 
-const isAllowedVercelOrigin = (origin = '') => {
+const isAllowedDeploymentOrigin = (origin = '') => {
   try {
     const hostname = new URL(origin).hostname;
-    return hostname.endsWith('.vercel.app');
+    return ALLOWED_FRONTEND_HOST_SUFFIXES.some((suffix) => hostname.endsWith(suffix));
   } catch {
     return false;
   }
@@ -57,7 +58,7 @@ expressApplication.use(cors({
       return callback(null, true);
     }
 
-    if (FRONTEND_URLS.includes(origin) || isAllowedVercelOrigin(origin)) {
+    if (FRONTEND_URLS.includes(origin) || isAllowedDeploymentOrigin(origin)) {
       return callback(null, true);
     }
 
