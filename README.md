@@ -213,13 +213,6 @@ Admin panel exists for judge/demo operations:
 - route: `/admin`
 - frontend gate via `VITE_ADMIN_ACCESS_KEY`
 - supports weather checks, disruption event creation, event-level auto-claim trigger, and flagged-claim review
-- admin login email: `verdhanchiku@gmail.com`
-- admin login password: `pass321`
-
-### Admin Page Credentials
-
-- Mail: `guidewire@gmail.com`
-- Password: `guide123`
 
 
 ## Payment Mode 
