@@ -315,7 +315,27 @@ deliveryPartnerRouter.post(
         });
       }
 
-      const isPasswordValid = await bcrypt.compare(password, deliveryPartner.passwordHash);
+      const storedPasswordHash = typeof deliveryPartner.passwordHash === 'string'
+        ? deliveryPartner.passwordHash
+        : '';
+
+      if (!storedPasswordHash) {
+        return response.status(401).json({
+          success: false,
+          message: 'Password is not set for this account. Please use Forgot Password to reset it.',
+        });
+      }
+
+      let isPasswordValid = false;
+      try {
+        isPasswordValid = await bcrypt.compare(password, storedPasswordHash);
+      } catch {
+        return response.status(401).json({
+          success: false,
+          message: 'Password record is invalid for this account. Please use Forgot Password to reset it.',
+        });
+      }
+
       if (!isPasswordValid) {
         return response.status(401).json({
           success: false,
